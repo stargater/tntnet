@@ -32,6 +32,13 @@
 
 #include <string>
 
+namespace cxxtools
+{
+    class SslCertificate;
+}
+
+/// @cond internal
+
 namespace tnt
 {
   class SocketIf
@@ -43,6 +50,7 @@ namespace tnt
       virtual std::string getPeerIp() const = 0;
       virtual std::string getServerIp() const = 0;
       virtual bool isSsl() const = 0;
+      virtual cxxtools::SslCertificate getSslCertificate() const = 0;
   };
 }
 

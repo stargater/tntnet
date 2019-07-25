@@ -26,6 +26,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+
 #include <tnt/tntconfig.h>
 #include <cxxtools/log.h>
 #include "config.h"
@@ -63,6 +64,20 @@ namespace tnt
     si.getMember("vhost", mapping.vhost);
     si.getMember("method", mapping.method);
     si.getMember("pathinfo", mapping.pathinfo);
+
+    // accept values "DECLINED" or a numeric http return code for *httpreturn*
+    // *httpreturn* specifies the default return code of components.
+    const cxxtools::SerializationInfo* psi = si.findMember("httpreturn");
+    if (psi)
+    {
+      std::string httpreturn;
+      *psi >>= httpreturn;
+      if (httpreturn == "DECLINED")
+        mapping.httpreturn = DECLINED;
+      else
+        *psi >>= mapping.httpreturn;
+    }
+
     bool ssl;
     if (si.getMember("ssl", ssl))
       mapping.ssl = ssl ? SSL_YES : SSL_NO;
@@ -84,22 +99,22 @@ namespace tnt
   void operator>>= (const cxxtools::SerializationInfo& si, TntConfig::Listener& listener)
   {
     si.getMember("ip", listener.ip);
-
-    if (!si.getMember("port", listener.port))
-      listener.port = 80;
+    si.getMember("port") >>= listener.port;
   }
 
   void operator>>= (const cxxtools::SerializationInfo& si, TntConfig::SslListener& ssllistener)
   {
     si.getMember("ip", ssllistener.ip);
-
-    if (!si.getMember("port", ssllistener.port))
-      ssllistener.port = 443;
-
+    si.getMember("port") >>= ssllistener.port;
     si.getMember("certificate") >>= ssllistener.certificate;
 
     if (!si.getMember("key", ssllistener.key))
       ssllistener.key = ssllistener.certificate;
+
+    ssllistener.sslVerifyLevel = 0;
+    if (si.getMember("sslVerifyLevel", ssllistener.sslVerifyLevel)
+        && ssllistener.sslVerifyLevel > 0)
+          si.getMember("sslCa") >>= ssllistener.sslCa;
   }
 
   void operator>>= (const cxxtools::SerializationInfo& si, TntConfig& config)
@@ -118,25 +133,37 @@ namespace tnt
     TntConfig::ListenersType& listeners = config.listeners;
     TntConfig::SslListenersType& ssllisteners = config.ssllisteners;
 
-    const cxxtools::SerializationInfo& lit = si.getMember("listeners");
-    for (cxxtools::SerializationInfo::ConstIterator it = lit.begin(); it != lit.end(); ++it)
+    const cxxtools::SerializationInfo* lsi = si.findMember("listeners");
+    if (lsi != 0)
     {
-      if (it->findMember("certificate") != 0)
+      for (cxxtools::SerializationInfo::ConstIterator it = lsi->begin(); it != lsi->end(); ++it)
+      {
+        if (it->findMember("certificate") != 0)
+        {
+          ssllisteners.resize(ssllisteners.size() + 1);
+          *it >>= ssllisteners.back();
+        }
+        else
+        {
+          listeners.resize(listeners.size() + 1);
+          *it >>= listeners.back();
+        }
+      }
+    }
+
+    lsi = si.findMember("listener");
+    if (lsi != 0)
+    {
+      if (lsi->findMember("certificate") != 0)
       {
         ssllisteners.resize(ssllisteners.size() + 1);
-        *it >>= ssllisteners.back();
+        *lsi >>= ssllisteners.back();
       }
       else
       {
         listeners.resize(listeners.size() + 1);
-        *it >>= listeners.back();
+        *lsi >>= listeners.back();
       }
-    }
-
-    if (config.listeners.empty() && config.ssllisteners.empty())
-    {
-      config.listeners.resize(1);
-      config.listeners.back().port = 80;
     }
 
     si.getMember("maxRequestSize", config.maxRequestSize);
@@ -170,7 +197,11 @@ namespace tnt
     si.getMember("timerSleep", config.timerSleep);
     si.getMember("documentRoot", config.documentRoot);
     si.getMember("server", config.server);
+    si.getMember("reuseAddress", config.reuseAddress);
     si.getMember("includes", config.includes);
+    si.getMember("logging", config.logConfiguration);
+    si.getMember("sslCipherList", config.sslCipherList);
+    si.getMember("sslProtocols", config.sslProtocols);
 
     config.config = si;
 
@@ -197,8 +228,8 @@ namespace tnt
       queueSize(1000),
       socketBufferSize(16384),
       socketReadTimeout(10),
-      socketWriteTimeout(10000),
-      keepAliveTimeout(15000),
+      socketWriteTimeout(cxxtools::Seconds(10)),
+      keepAliveTimeout(cxxtools::Seconds(30)),
       keepAliveMax(1000),
       sessionTimeout(300),
       listenBacklog(512),
@@ -209,7 +240,8 @@ namespace tnt
       maxUrlMapCache(8192),
       defaultContentType("text/html; charset=UTF-8"),
       timerSleep(10),
-      server("Tntnet/" VERSION)
+      server("Tntnet/" VERSION),
+      reuseAddress(true)
     { }
 
   TntConfig& TntConfig::it()

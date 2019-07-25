@@ -38,42 +38,14 @@
 #include <cxxtools/refcounted.h>
 #include <cxxtools/smartptr.h>
 
-/*
-// in tntnet (mainthread):
-
-\code
-Jobqueue queue;
-void mainloop()
-{
-  while (1)
-  {
-    Jobqueue::JobPtr j = new Tcpjob();
-    j->accept(poller.get());
-    queue.put(j);
-  }
-}
-
-// in server (workerthread):
-void Server::run()
-{
-  while (1)
-  {
-    Jobqueue::JobPtr j = queue.get();
-    std::iostream& socket = j->getStream();
-    processRequest(socket);
-  }
-}
-\endcode
-*/
+/// @cond internal
 
 namespace tnt
 {
   class Tntnet;
 
-  /// @cond internal
-  class Job : public cxxtools::RefCounted // one per request
+  class Job : public cxxtools::RefCounted
   {
-    private:
       unsigned _keepAliveCounter;
 
       HttpRequest _request;
@@ -96,11 +68,10 @@ namespace tnt
         { return _keepAliveCounter > 0 ? --_keepAliveCounter : 0; }
       void clear();
       void touch() { time(&_lastAccessTime); }
-      int msecToTimeout(time_t currentTime) const;
+      cxxtools::Milliseconds msecToTimeout(time_t currentTime) const;
   };
 
-  /// @cond internal
-  class Jobqueue // one per process
+  class Jobqueue
   {
     public:
       typedef cxxtools::SmartPtr<Job> JobPtr;
@@ -133,6 +104,7 @@ namespace tnt
       bool empty() const
         { return _jobs.empty(); }
   };
+
 }
 
 #endif // TNT_JOB_H

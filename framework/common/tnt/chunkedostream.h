@@ -26,6 +26,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+
 #ifndef TNT_CHUNKEDOSTREAM_H
 #define TNT_CHUNKEDOSTREAM_H
 
@@ -35,10 +36,10 @@ namespace tnt
 {
   class ChunkedWriter : public std::streambuf
   {
-    private:
       std::streambuf* _obuf;
       char* _buffer;
       unsigned _bufsize;
+      unsigned _bytesWritten;
 
     public:
       explicit ChunkedWriter(std::streambuf* obuf, unsigned bufsize = 8192)
@@ -57,21 +58,25 @@ namespace tnt
       void finish();
 
       void setSink(std::streambuf* obuf)
-        { _obuf = obuf; }
+        { _obuf = obuf; _bytesWritten = 0; }
+
+      unsigned bytesWritten() const
+        { return _bytesWritten; }
   };
 
   class ChunkedOStream : public std::ostream
   {
-    private:
       ChunkedWriter _streambuf;
 
     public:
       explicit ChunkedOStream(std::ostream& sink)
-        : _streambuf(sink.rdbuf())
+        : std::ostream(0),
+          _streambuf(sink.rdbuf())
         { std::ostream::init(&_streambuf); }
 
       explicit ChunkedOStream(std::streambuf* obuf)
-        : _streambuf(obuf)
+        : std::ostream(0),
+          _streambuf(obuf)
         { std::ostream::init(&_streambuf); }
 
       void finish()
@@ -82,6 +87,9 @@ namespace tnt
 
       void setSink(std::streambuf* sink)
         { _streambuf.setSink(sink); }
+
+      unsigned bytesWritten() const
+        { return _streambuf.bytesWritten(); }
   };
 }
 

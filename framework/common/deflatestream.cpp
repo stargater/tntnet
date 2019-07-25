@@ -53,7 +53,7 @@ namespace tnt
     }
   }
 
-  DeflateStreamBuf::DeflateStreamBuf(std::streambuf* sink, int level, unsigned bufsize)
+  DeflateStreamBuf::DeflateStreamBuf(std::streambuf* sink, int level, int windowBits, unsigned bufsize)
     : _obuffer(bufsize),
       _sink(sink)
   {
@@ -69,14 +69,15 @@ namespace tnt
     _stream.avail_out = 0;
 
     int strategy = Z_DEFAULT_STRATEGY;
-    level = 6;
-    checkError(::deflateInit2(&_stream, level, Z_DEFLATED, -MAX_WBITS, 8, strategy), _stream);
+    log_debug("deflateInit2(" << static_cast<const void*>(&_stream) << ')');
+    checkError(::deflateInit2(&_stream, level, Z_DEFLATED, windowBits, 8, strategy), _stream);
 
     setp(&_obuffer[0], &_obuffer[0] + _obuffer.size());
   }
 
   DeflateStreamBuf::~DeflateStreamBuf()
   {
+    log_debug("deflateEnd(" << static_cast<const void*>(&_stream) << ')');
     ::deflateEnd(&_stream);
   }
 
@@ -92,6 +93,7 @@ namespace tnt
     _stream.avail_out = sizeof(zbuffer);
 
     // deflate
+    log_debug("deflate(" << static_cast<const void*>(&_stream) << ", Z_NO_FLUSH)");
     checkError(::deflate(&_stream, Z_NO_FLUSH), _stream);
 
     // copy zbuffer to sink / consume deflated data
@@ -132,6 +134,7 @@ namespace tnt
       _stream.next_out = (Bytef*)zbuffer;
       _stream.avail_out = sizeof(zbuffer);
 
+      log_debug("deflate(" << static_cast<const void*>(&_stream) << ", Z_SYNC_FLUSH)");
       checkError(::deflate(&_stream, Z_SYNC_FLUSH), _stream);
 
       // copy zbuffer to sink
@@ -161,6 +164,7 @@ namespace tnt
       _stream.next_out = (Bytef*)zbuffer;
       _stream.avail_out = sizeof(zbuffer);
 
+      log_debug("deflate(" << static_cast<const void*>(&_stream) << ", Z_FINISH)");
       int ret = checkError(::deflate(&_stream, Z_FINISH), _stream);
 
       // copy zbuffer to sink
@@ -178,6 +182,12 @@ namespace tnt
     // reset outbuffer
     setp(&_obuffer[0], &_obuffer[0] + _obuffer.size());
     return 0;
+  }
+
+  void DeflateStreamBuf::reinitialize()
+  {
+    log_debug("deflateReset(" << static_cast<const void*>(&_stream) << ')');
+    checkError(::deflateReset(&_stream), _stream);
   }
 
   void DeflateStream::end()

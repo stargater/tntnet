@@ -26,6 +26,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+
 #ifndef TNT_MBCOMPONENT_H
 #define TNT_MBCOMPONENT_H
 
@@ -38,7 +39,6 @@ namespace tnt
 
   class MbComponent : public EcppComponent
   {
-    private:
       const char* _rawData;
       const char** _urls;
       const char** _mimetypes;

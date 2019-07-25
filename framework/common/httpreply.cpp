@@ -37,6 +37,7 @@
 #include <tnt/urlescostream.h>
 #include <tnt/encoding.h>
 #include <tnt/chunkedostream.h>
+#include <tnt/cstream.h>
 #include <cxxtools/log.h>
 #include <cxxtools/md5stream.h>
 #include <cxxtools/mutex.h>
@@ -49,51 +50,72 @@ namespace tnt
 {
   log_define("tntnet.httpreply")
 
+  namespace
+  {
+    class Compressor
+    {
+        ocstream _zbody;
+        DeflateStream _deflator;
+        uLong _crc;
+        unsigned _size;
+
+      public:
+        Compressor()
+          : _deflator(_zbody),
+            _crc(0),
+            _size(0)
+        {
+        }
+
+        void compress(const char* d, unsigned s)
+        {
+          _deflator.write(d, s);
+          _size += s;
+          _crc = crc32(_crc, reinterpret_cast<const Bytef*>(d), s);
+        }
+
+        void finalize()
+        {
+          _deflator.end();
+        }
+
+        std::string::size_type uncompressedSize()
+        { return _size; }
+
+        std::string::size_type zsize()
+        { return _zbody.size(); }
+
+        std::string str() const
+        { return _zbody.str(); }
+
+        void output(std::ostream& out)
+        { _zbody.output(out); }
+
+        void clear()
+        {
+          _zbody.makeEmpty();
+          _deflator.reinitialize();
+          _crc = 0;
+          _size = 0;
+        }
+    };
+  }
+
   ////////////////////////////////////////////////////////////////////////
   // HttpReply
   //
-  namespace
-  {
-    std::string doCompress(const std::string& body)
-    {
-      std::ostringstream b;
-      char f[] = "\x1f\x8b\x08\x00"
-           "\x00\x00\x00\x00"
-           "\x04\x03";
-      b.write(f, sizeof(f) - 1);
-
-      DeflateStream deflator(b);
-      deflator.write(body.data(), body.size());
-      deflator.end();
-
-      uLong crc = crc32(0, reinterpret_cast<const Bytef*>(body.data()), body.size());
-      uint32_t u = crc;
-      b.put(static_cast<char>(u & 0xFF));
-      b.put(static_cast<char>((u >>= 8) & 0xFF));
-      b.put(static_cast<char>((u >>= 8) & 0xFF));
-      b.put(static_cast<char>((u >>= 8) & 0xFF));
-
-      u = body.size();
-      b.put(static_cast<char>(u & 0xFF));
-      b.put(static_cast<char>((u >>= 8) & 0xFF));
-      b.put(static_cast<char>((u >>= 8) & 0xFF));
-      b.put(static_cast<char>((u >>= 8) & 0xFF));
-
-      return b.str();
-    }
-  }
 
   //////////////////////////////////////////////////////////////////////
   // HttpReply::Impl
   //
-
   struct HttpReply::Impl
   {
     std::ostream* socket;
-    std::ostringstream outstream;
-    HtmlEscOstream safe_outstream;
-    UrlEscOstream url_outstream;
-    ChunkedOStream chunked_outstream;
+    ocstream outstream;
+    HtmlEscOstream safeOutstream;
+    UrlEscOstream urlOutstream;
+    ChunkedOStream chunkedOutstream;
+    Compressor compressor;
 
     Encoding acceptEncoding;
 
@@ -146,8 +168,8 @@ namespace tnt
     impl->headRequest = false;
     impl->clearSession = false;
     impl->acceptEncoding.clear();
-    impl->safe_outstream.setSink(impl->outstream.rdbuf());
-    impl->chunked_outstream.setSink(impl->outstream.rdbuf());
+    impl->safeOutstream.setSink(impl->outstream.rdbuf());
+    impl->chunkedOutstream.setSink(impl->outstream.rdbuf());
 
     return impl;
   }
@@ -158,10 +180,11 @@ namespace tnt
     if (pool.size() < 64)
     {
       inst->outstream.clear();
-      inst->outstream.str(std::string());
-      inst->safe_outstream.clear();
-      inst->url_outstream.clear();
-      inst->chunked_outstream.clear();
+      inst->outstream.makeEmpty();
+      inst->safeOutstream.clear();
+      inst->urlOutstream.clear();
+      inst->chunkedOutstream.clear();
+      inst->compressor.clear();
       pool.push_back(inst);
     }
     else
@@ -180,100 +203,75 @@ namespace tnt
 
   HttpReply::Impl::Impl(std::ostream& s, bool sendStatusLine_)
     : socket(&s),
-      safe_outstream(outstream),
-      url_outstream(outstream),
-      chunked_outstream(s),
+      safeOutstream(outstream),
+      urlOutstream(outstream),
+      chunkedOutstream(s),
       keepAliveCounter(0),
       sendStatusLine(sendStatusLine_),
       headRequest(false),
       clearSession(false)
-  {
-  }
+    { }
 
-  //////////////////////////////////////////////////////////////////////
-  // HttpReply
-  //
-  HttpReply::HttpReply(std::ostream& s, bool sendStatusLine_)
-    : _impl(Impl::pool.getInstance(s, sendStatusLine_)),
-      _current_outstream(&_impl->outstream),
-      _safe_outstream(&_impl->safe_outstream),
-      _url_outstream(&_impl->url_outstream)
-  {
-  }
+  HttpReply::HttpReply(std::ostream& s, bool sendStatusLine)
+    : _impl(Impl::pool.getInstance(s, sendStatusLine)),
+      _currentOutstream(&_impl->outstream),
+      _safeOutstream(&_impl->safeOutstream),
+      _urlOutstream(&_impl->urlOutstream)
+    { }
 
   HttpReply::~HttpReply()
-  {
-    Impl::pool.releaseInstance(_impl);
-  }
+    { Impl::pool.releaseInstance(_impl); }
 
   void HttpReply::setHeadRequest(bool sw)
-  {
-    _impl->headRequest = sw;
-  }
+    { _impl->headRequest = sw; }
 
   void HttpReply::clearSession()
-  {
-    _impl->clearSession = true;
-  }
+    { _impl->clearSession = true; }
 
   bool HttpReply::isClearSession() const
-  {
-    return _impl->clearSession;
-  }
+    { return _impl->clearSession; }
 
   void HttpReply::resetContent()
-  {
-    _impl->outstream.str(std::string());
-  }
+    { _impl->outstream.makeEmpty(); }
 
   void HttpReply::rollbackContent(unsigned size)
   {
-    _impl->outstream.str( _impl->outstream.str().substr(0, size) );
-    _impl->outstream.seekp(size);
+    _impl->outstream.rollback(size);
   }
 
   bool HttpReply::isDirectMode() const
-  {
-    return _current_outstream == _impl->socket;
-  }
+    { return _currentOutstream == _impl->socket; }
 
   std::string::size_type HttpReply::getContentSize() const
-  {
-    return _impl->outstream.str().size();
-  }
+    { return _impl->outstream.size(); }
+
+  unsigned HttpReply::chunkedBytesWritten() const
+    { return _impl->chunkedOutstream.bytesWritten(); }
 
   std::ostream& HttpReply::getDirectStream()
-  {
-    return *_impl->socket;
-  }
+    { return *_impl->socket; }
 
   void HttpReply::setKeepAliveCounter(unsigned c)
-  {
-    _impl->keepAliveCounter = c;
-  }
+    { _impl->keepAliveCounter = c; }
 
   unsigned HttpReply::getKeepAliveCounter() const
-  {
-    return _impl->keepAliveCounter;
-  }
+    { return _impl->keepAliveCounter; }
 
   void HttpReply::setAcceptEncoding(const Encoding& enc)
-  {
-    _impl->acceptEncoding = enc;
-  }
+    { _impl->acceptEncoding = enc; }
 
   bool HttpReply::tryCompress(std::string& body)
   {
-    log_debug("gzip");
-
-    std::string cbody = doCompress(body);
+    Compressor compressor;
+    compressor.compress(body.data(), body.size());
+    compressor.finalize();
 
     std::string::size_type oldSize = body.size();
     // only send compressed data, if the data is compressed more than 1/8th
-    if (oldSize - (oldSize >> 3) > cbody.size())
+    if (oldSize - (oldSize >> 3) > compressor.zsize())
     {
-      body = cbody;
-      log_info("gzip body " << oldSize << " bytes to " << body.size() << " bytes");
+      body = compressor.str();
+      log_info("gzip body " << oldSize << " bytes to " << compressor.zsize() << " bytes");
 
       return true;
     }
@@ -282,30 +280,28 @@ namespace tnt
   }
 
   void HttpReply::postRunCleanup()
+    { Impl::pool.clear(); }
+
+  void HttpReply::sendHttpStatus(std::ostream& hsocket, unsigned ret, const char* msg) const
   {
-    Impl::pool.clear();
-  }
-
-  void HttpReply::send(unsigned ret, const char* msg, bool ready) const
-  {
-    std::string body = _impl->outstream.str();
-
-    std::ostream hsocket(_impl->socket->rdbuf());
-    hsocket.imbue(std::locale::classic());
-
-    // send header
-
     if (_impl->sendStatusLine)
     {
+      if (msg == 0)
+        msg = HttpReturn::httpMessage(ret);
+
       log_debug("HTTP/" << getMajorVersion() << '.' << getMinorVersion()
              << ' ' << ret << ' ' << msg);
       hsocket << "HTTP/" << getMajorVersion() << '.' << getMinorVersion()
               << ' ' << ret << ' ' << msg << "\r\n";
     }
+  }
 
+  void HttpReply::sendHttpHeaders(std::ostream& hsocket) const
+  {
     if (!hasHeader(httpheader::date))
     {
-      std::string current = htdateCurrent();
+      char current[50];
+      htdateCurrent(current);
       log_debug(httpheader::date << ' ' << current);
       hsocket << httpheader::date << ' ' << current << "\r\n";
     }
@@ -317,28 +313,72 @@ namespace tnt
       hsocket << httpheader::server << ' ' << TntConfig::it().server << "\r\n";
     }
 
+    for (header_type::const_iterator it = header.begin(); it != header.end(); ++it)
+    {
+      log_debug(it->first << ' ' << it->second);
+      hsocket << it->first << ' ' << it->second << "\r\n";
+    }
+
+    if (hasCookies())
+    {
+      log_debug(httpheader::setCookie << ' ' << httpcookies);
+
+      for (Cookies::cookies_type::const_iterator it = httpcookies._data.begin();
+        it != httpcookies._data.end(); ++it)
+      {
+        hsocket << httpheader::setCookie << ' ';
+        it->second.write(hsocket, it->first);
+        hsocket << "\r\n";
+      }
+    }
+
+  }
+
+  void HttpReply::send(unsigned ret, const char* msg, bool ready) const
+  {
+    std::ostream hsocket(_impl->socket->rdbuf());
+
+    // send header
+    sendHttpStatus(hsocket, ret, msg);
+    sendHttpHeaders(hsocket);
+
+    bool compressed = false;
+
     if (ready)
     {
-      if (_current_outstream == &_impl->chunked_outstream)
+      if (_currentOutstream == &_impl->chunkedOutstream)
       {
         log_debug(httpheader::transferEncoding << " chunked");
         hsocket << httpheader::transferEncoding << " chunked\r\n";
       }
       else
       {
-        if (body.size() >= TntConfig::it().minCompressSize
-          && !hasHeader(httpheader::contentEncoding)
-          && _impl->acceptEncoding.accept("gzip")
-          && tryCompress(body))
-        {
-          log_debug(httpheader::contentEncoding << " gzip");
-          hsocket << httpheader::contentEncoding << " gzip\r\n";
-        }
+        ocstream& body = _impl->outstream;
 
-        if (!hasHeader(httpheader::contentLength))
+        if (body.size() >= TntConfig::it().minCompressSize
+            && !hasHeader(httpheader::contentEncoding)
+            && _impl->acceptEncoding.accept("gzip")
+            && !hasHeader(httpheader::contentLength))
         {
-          log_debug(httpheader::contentLength << ' ' << body.size());
-          hsocket << httpheader::contentLength << ' ' << body.size() << "\r\n";
+          for (unsigned n = 0; n < body.chunkcount(); ++n)
+            _impl->compressor.compress(body.chunk(n), body.chunksize(n));
+          _impl->compressor.finalize();
+
+          compressed = true;
+          log_debug(httpheader::contentEncoding << " gzip");
+          log_debug(httpheader::contentLength << ' ' << _impl->compressor.zsize());
+
+          hsocket << httpheader::contentLength << ' ' << _impl->compressor.zsize() << "\r\n"
+                  << httpheader::contentEncoding << " gzip\r\n";
+          log_info("gzip body " << body.size() << " bytes to " << _impl->compressor.zsize() << " bytes");
+        }
+        else
+        {
+          if (!hasHeader(httpheader::contentLength))
+          {
+            log_debug(httpheader::contentLength << ' ' << body.size());
+            hsocket << httpheader::contentLength << ' ' << body.size() << "\r\n";
+          }
         }
       }
 
@@ -365,72 +405,59 @@ namespace tnt
       }
     }
 
-    for (header_type::const_iterator it = header.begin(); it != header.end(); ++it)
-    {
-      log_debug(it->first << ' ' << it->second);
-      hsocket << it->first << ' ' << it->second << "\r\n";
-    }
-
-    if (hasCookies())
-    {
-      log_debug(httpheader::setCookie << ' ' << httpcookies);
-
-      for (Cookies::cookies_type::const_iterator it = httpcookies._data.begin();
-        it != httpcookies._data.end(); ++it)
-      {
-        hsocket << httpheader::setCookie << ' ';
-        it->second.write(hsocket, it->first);
-        hsocket << "\r\n";
-      }
-    }
-
     hsocket << "\r\n";
 
     // send body
-
     if (_impl->headRequest)
       log_debug("HEAD-request - empty body");
     else
     {
-      if (_current_outstream == &_impl->chunked_outstream)
+      ocstream& body = _impl->outstream;
+      if (_currentOutstream == &_impl->chunkedOutstream)
       {
-        _current_outstream->write(body.data(), body.size());
+        body.output(*_currentOutstream);
       }
       else
       {
-        log_debug("send " << body.size() << " bytes body");
-        // We send in chunks just to leave to ostream operator from time to time.
-        // There are iostream libraries, which do have a global lock, which
-        // block other iostreams while writing.
-        const unsigned chunkSize = 65536;
-        for (unsigned n = 0; n < body.size(); n += chunkSize)
-          hsocket.write(body.data() + n, std::min(static_cast<unsigned>(body.size() - n), chunkSize));
+        if (compressed)
+        {
+          log_debug("send " << _impl->compressor.zsize() << " bytes body (compressed)");
+          _impl->compressor.output(hsocket);
+        }
+        else
+        {
+          log_debug("send " << body.size() << " bytes body");
+          body.output(hsocket);
+        }
       }
     }
   }
 
-  void HttpReply::sendReply(unsigned ret, const char* msg)
+  bool HttpReply::sendReply(unsigned ret, const char* msg)
   {
     log_debug("sendReply");
-    if (_current_outstream == &_impl->chunked_outstream)
+    if (_currentOutstream == &_impl->chunkedOutstream)
     {
       log_debug("finish chunked encoding");
-      _impl->chunked_outstream.finish();
+      _impl->chunkedOutstream.finish();
       *_impl->socket << "\r\n";
-      _impl->socket->flush();
     }
     else if (!isDirectMode())
     {
       log_debug("send data");
       send(ret, msg, true);
-      _impl->socket->flush();
     }
+
+    _impl->socket->flush();
+    return !_impl->socket->fail();
   }
 
   void HttpReply::setMd5Sum()
   {
     cxxtools::Md5stream md5;
-    md5 << _impl->outstream.str().size();
+    const tnt::ocstream& c = _impl->outstream;
+    for (unsigned n = 0; n < c.chunkcount(); ++n)
+      md5.write(c.chunk(n), c.chunksize(n));
     setHeader(httpheader::contentMD5, md5.getHexDigest());
   }
 
@@ -438,11 +465,11 @@ namespace tnt
   {
     setHeader(httpheader::location, newLocation);
 
-    _impl->outstream.str(std::string());
+    _impl->outstream.makeEmpty();
     _impl->outstream << "<html><body>moved to <a href=\"" << newLocation << "\">" << newLocation << "</a></body></html>";
 
     unsigned httpCode = static_cast<unsigned>(type);
-    throw HttpReturn(httpCode, HttpReturn::httpMessage(httpCode));
+    throw HttpReturn(httpCode);
 
     return httpCode;
   }
@@ -451,10 +478,10 @@ namespace tnt
   {
     setHeader(httpheader::wwwAuthenticate, "Basic realm=\"" + realm + '"');
 
-    _impl->outstream.str(std::string());
+    _impl->outstream.makeEmpty();
     _impl->outstream << "<html><body><h1>not authorized</h1></body></html>";
 
-    throw HttpReturn(HTTP_UNAUTHORIZED, "not authorized");
+    throw HttpReturn(HTTP_UNAUTHORIZED);
 
     return HTTP_UNAUTHORIZED;
   }
@@ -476,7 +503,7 @@ namespace tnt
       char buffer[64];
       snprintf(buffer, sizeof(buffer),
         "timeout=%lu, max=%u",
-        static_cast<unsigned long>(TntConfig::it().keepAliveTimeout),
+        static_cast<unsigned long>(TntConfig::it().keepAliveTimeout.totalSeconds()),
         static_cast<unsigned>(getKeepAliveCounter()));
       header.setHeader(httpheader::keepAlive, buffer, true);
 
@@ -507,30 +534,32 @@ namespace tnt
   {
     if (!isDirectMode())
     {
-      log_debug("enable chunked mode");
+      log_debug("enable direct mode");
       send(ret, msg, false);
-      _current_outstream = _impl->socket;
-      _impl->safe_outstream.setSink(*_impl->socket);
+      setDirectModeNoFlush();
     }
   }
 
   void HttpReply::setDirectModeNoFlush()
   {
-    _current_outstream = _impl->socket;
-    _impl->safe_outstream.setSink(*_impl->socket);
+    _currentOutstream = _impl->socket;
+    _impl->safeOutstream.setSink(*_impl->socket);
+    _impl->urlOutstream.setSink(*_impl->socket);
   }
 
   void HttpReply::setChunkedEncoding(unsigned ret, const char* msg)
   {
     log_debug("set chunked encoding");
-    _current_outstream = &_impl->chunked_outstream;
-    _impl->chunked_outstream.setSink(*_impl->socket);
+    _currentOutstream = &_impl->chunkedOutstream;
+    _impl->chunkedOutstream.setSink(*_impl->socket);
+    _impl->safeOutstream.setSink(_impl->chunkedOutstream.rdbuf());
+    _impl->urlOutstream.setSink(_impl->chunkedOutstream.rdbuf());
     send(ret, msg, true);
   }
 
   bool HttpReply::isChunkedEncoding() const
   {
-    return _current_outstream == &_impl->chunked_outstream;
+    return _currentOutstream == &_impl->chunkedOutstream;
   }
 
   void HttpReply::setCookie(const std::string& name, const Cookie& value)

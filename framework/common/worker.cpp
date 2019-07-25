@@ -73,7 +73,7 @@ namespace tnt
   Worker::workers_type Worker::_workers;
   Comploader Worker::_comploader;
 
-  Worker::Worker(Tntnet& app)
+  Worker::Worker(TntnetImpl& app)
     : _application(app),
       _threadId(0),
       _state(stateStarting),
@@ -92,7 +92,7 @@ namespace tnt
     {
       _state = stateWaitingForJob;
       Jobqueue::JobPtr j = queue.get();
-      if (Tntnet::shouldStop())
+      if (TntnetImpl::shouldStop())
       {
         // put job back to queue to wake up next worker if any left
         queue.put(j);
@@ -102,7 +102,7 @@ namespace tnt
       try
       {
         std::iostream& socket = j->getStream();
-        if (Tntnet::shouldStop())
+        if (TntnetImpl::shouldStop())
           break;
 
         bool keepAlive;
@@ -193,6 +193,7 @@ namespace tnt
       }
       catch (const cxxtools::IOTimeout& e)
       {
+        log_debug("IOTimeout");
         _application.getPoller().addIdleJob(j);
       }
       catch (const cxxtools::net::AcceptTerminated&)
@@ -301,14 +302,17 @@ namespace tnt
     static cxxtools::atomic_t waitCount = 0;
     cxxtools::atomicIncrement(waitCount);
 
-    const std::string& fname = TntConfig::it().accessLog;
-    if (fname.empty())
-      return;
-
     std::ofstream& accessLog = _application._accessLog;
 
     if (!accessLog.is_open())
     {
+      const std::string& fname = TntConfig::it().accessLog;
+      if (fname.empty())
+      {
+        log_debug("accesLog setting is empty");
+        return;
+      }
+
       cxxtools::MutexLock lock(_application._accessLogMutex);
 
       if (!accessLog.is_open())
@@ -439,6 +443,9 @@ namespace tnt
         try
         {
           http_return = comp->topCall(request, reply, request.getQueryParams());
+          if (http_return == DEFAULT)
+            http_return = ci.getHttpReturn();
+
           http_msg = HttpReturn::httpMessage(http_return);
         }
         catch (const HttpReturn& e)
@@ -458,23 +465,25 @@ namespace tnt
           }
           else
           {
-            log_info("request " << request.getMethod_cstr() << ' ' << request.getQuery() << " ready, returncode " << http_return << ' ' << http_msg << " - ContentSize: " << reply.getContentSize());
+            log_info_if(!reply.isChunkedEncoding(), "request " << request.getMethod_cstr() << ' ' << request.getQuery() << " ready, returncode " << http_return << ' ' << http_msg << " - ContentSize: " << reply.getContentSize());
 
             _application.getScopemanager().postCall(request, reply, appname);
 
             _state = stateSendReply;
-            reply.sendReply(http_return, http_msg);
+            if (reply.sendReply(http_return, http_msg))
+            {
+              log_debug("reply sent");
+            }
+            else
+            {
+              reply.setKeepAliveCounter(0);
+              log_warn("sending failed");
+            }
+
+            log_info_if(reply.isChunkedEncoding(), "request " << request.getMethod_cstr() << ' ' << request.getQuery() << " ready, returncode " << http_return << ' ' << http_msg << " - ContentSize: " << reply.chunkedBytesWritten() << " (chunked)");
           }
 
           logRequest(request, reply, http_return);
-
-          if (reply.out())
-            log_debug("reply sent");
-          else
-          {
-            reply.setKeepAliveCounter(0);
-            log_warn("sending failed");
-          }
 
           return;
         }

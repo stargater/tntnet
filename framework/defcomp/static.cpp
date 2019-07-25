@@ -26,6 +26,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+
 #include "static.h"
 #include "mimehandler.h"
 #include <tnt/httprequest.h>
@@ -228,40 +229,42 @@ namespace tnt
 #endif
   }
 
+  //////////////////////////////////////////////////////////////////////
+  // factory
+  //
+  static ComponentFactoryImpl<Static> staticFactory("static");
+
+  //////////////////////////////////////////////////////////////////////
+  // component definition
+  //
   Static::~Static()
     { delete _handler; }
 
-  void Static::configure(const TntConfig& config)
+  void Static::configure(const TntConfig&)
   {
     if (_handler == 0)
       _handler = new MimeHandler();
   }
 
-  static ComponentFactoryImpl<Static> staticFactory("static");
-
-  //////////////////////////////////////////////////////////////////////
-  // componentdefinition
-  //
   void Static::setContentType(HttpRequest& request, HttpReply& reply)
   {
     if (_handler)
       reply.setContentType(_handler->getMimeType(request.getPathInfo()).c_str());
   }
 
-  unsigned Static::operator() (HttpRequest& request, HttpReply& reply, QueryParams& qparams)
-    { return doCall(request, reply, qparams, false); }
+  unsigned Static::operator() (HttpRequest& request, HttpReply& reply, QueryParams& qparam)
+    { return doCall(request, reply, qparam, false); }
 
-  unsigned Static::topCall(HttpRequest& request, HttpReply& reply, QueryParams& qparams)
-    { return doCall(request, reply, qparams, true); }
+  unsigned Static::topCall(HttpRequest& request, HttpReply& reply, QueryParams& qparam)
+    { return doCall(request, reply, qparam, true); }
 
-  unsigned Static::doCall(HttpRequest& request, HttpReply& reply, QueryParams& qparams, bool top)
+  unsigned Static::doCall(HttpRequest& request, HttpReply& reply, QueryParams&, bool top)
   {
-    if (!tnt::HttpRequest::checkUrl(request.getPathInfo())
-      || request.getPathInfo().find('\0') != std::string::npos)
+    if (!tnt::HttpRequest::checkUrl(request.getPathInfo()) ||
+        request.getPathInfo().find('\0') != std::string::npos)
       throw tnt::HttpError(HTTP_BAD_REQUEST, "illegal url");
 
     // fetch document root from arguments or take global setting as default
-
     std::string file = request.getArg("documentRoot", TntConfig::it().documentRoot);
     log_debug("document root =\"" << file << '"');
 
@@ -350,6 +353,9 @@ namespace tnt
           if (offset > st.st_size)
             return HTTP_RANGE_NOT_SATISFIABLE;
 
+          if (offset + count > st.st_size)
+            count = st.st_size - offset;
+
           reply.setHeader(httpheader::contentLocation, request.getUrl());
           std::ostringstream contentRange;
           contentRange << offset << '-' << (offset+count)-1 << '/' << st.st_size;
@@ -358,11 +364,14 @@ namespace tnt
           httpOkReturn = HTTP_PARTIAL_CONTENT;
         }
         else
-          log_debug("ignore invalid byte range " << range);
+        {
+          log_debug("invalid byte range " << range);
+          return HTTP_RANGE_NOT_SATISFIABLE;
+        }
       }
 
       // set Content-Length
-      reply.setContentLengthHeader(count);
+      reply.setContentLengthHeader(reply.getContentSize() + count);
 
       if (request.isMethodHEAD())
       {
@@ -378,62 +387,69 @@ namespace tnt
       log_info("send file \"" << file << "\" size " << st.st_size << " bytes; offset=" << offset << " count=" << count);
 
 #if defined(HAVE_SENDFILE) && defined(HAVE_SYS_SENDFILE_H)
-      int on = 1;
-      int off = 0;
-      try
+      if (request.isSsl())
       {
-        cxxtools::net::iostream& tcpStream = dynamic_cast<cxxtools::net::iostream&>(reply.getDirectStream());
-
-        if (::setsockopt(tcpStream.getFd(), SOL_TCP, TCP_NODELAY,
-            &off, sizeof(off)) < 0)
-          throw cxxtools::SystemError("setsockopt(TCP_NODELAY)");
-
-        if (::setsockopt(tcpStream.getFd(), SOL_TCP, TCP_CORK,
-            &on, sizeof(on)) < 0)
-          throw cxxtools::SystemError("setsockopt(TCP_CORK)");
-
-        reply.setDirectMode(httpOkReturn, HttpReturn::httpMessage(httpOkReturn));
-        tcpStream.flush();
-
-        Fdfile in(file.c_str(), O_RDONLY);
-        ssize_t s;
-        while(tcpStream)
+        log_debug("no sendfile on ssl");
+      }
+      else
+      {
+        try
         {
-          do
+          int on = 1;
+          int off = 0;
+
+          cxxtools::net::iostream& tcpStream = dynamic_cast<cxxtools::net::iostream&>(reply.getDirectStream());
+
+          if (::setsockopt(tcpStream.getFd(), SOL_TCP, TCP_NODELAY,
+              &off, sizeof(off)) < 0)
+            throw cxxtools::SystemError("setsockopt(TCP_NODELAY)");
+
+          if (::setsockopt(tcpStream.getFd(), SOL_TCP, TCP_CORK,
+              &on, sizeof(on)) < 0)
+            throw cxxtools::SystemError("setsockopt(TCP_CORK)");
+
+          reply.setDirectMode(httpOkReturn, HttpReturn::httpMessage(httpOkReturn));
+          tcpStream.flush();
+
+          Fdfile in(file.c_str(), O_RDONLY);
+          ssize_t s;
+          while(tcpStream)
           {
-            log_debug("sendfile offset " << offset << " size " << count);
-            s = sendfile(tcpStream.getFd(), in.getFd(), &offset, count);
-            log_debug("sendfile returns " << s);
-          } while (s < 0 && errno == EINTR);
+            do
+            {
+              log_debug("sendfile offset " << offset << " size " << count);
+              s = sendfile(tcpStream.getFd(), in.getFd(), &offset, count);
+              log_debug("sendfile returns " << s);
+            } while (s < 0 && errno == EINTR);
 
-          if (s < 0 && errno != EAGAIN)
-            throw cxxtools::SystemError("sendfile");
+            if (s < 0 && errno != EAGAIN)
+              throw cxxtools::SystemError("sendfile");
 
-          if (offset >= count)
-            break;
+            if (offset >= count || s == 0)
+              break;
 
-          log_debug("poll");
-          pollout(tcpStream.getFd(), tcpStream.getTimeout());
+            log_debug("poll");
+            pollout(tcpStream.getFd(), tcpStream.getTimeout());
+          }
+
+          if (::setsockopt(tcpStream.getFd(), SOL_TCP, TCP_CORK,
+              &off, sizeof(off)) < 0)
+            throw cxxtools::SystemError("setsockopt(TCP_CORK)");
+
+          if (::setsockopt(tcpStream.getFd(), SOL_TCP, TCP_NODELAY,
+              &on, sizeof(on)) < 0)
+            throw cxxtools::SystemError("setsockopt(TCP_NODELAY)");
+
+          return httpOkReturn;
         }
-
-        if (::setsockopt(tcpStream.getFd(), SOL_TCP, TCP_CORK,
-            &off, sizeof(off)) < 0)
-          throw cxxtools::SystemError("setsockopt(TCP_CORK)");
-
-        if (::setsockopt(tcpStream.getFd(), SOL_TCP, TCP_NODELAY,
-            &on, sizeof(on)) < 0)
-          throw cxxtools::SystemError("setsockopt(TCP_NODELAY)");
-
-        return httpOkReturn;
+        catch (const std::bad_cast& e)
+        {
+          log_debug("stream is no tcpstream - don't use sendfile");
+        }
       }
-      catch (const std::bad_cast& e)
-      {
-        log_debug("stream is no tcpstream - don't use sendfile");
-        reply.setDirectMode();
-      }
-#else
-      reply.setDirectMode();
 #endif
+
+      reply.setDirectMode();
     }
 
     std::ifstream in(file.c_str());
@@ -444,7 +460,7 @@ namespace tnt
       return DECLINED;
     }
 
-    if (offset == 0 && count == st.st_size)
+    if (offset == 0 && count == st.st_size && count > 0)
     {
       reply.out() << in.rdbuf() << std::flush;
       if (in.fail())

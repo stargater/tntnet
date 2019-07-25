@@ -11,8 +11,6 @@ if MAKE_SDK
 SDKDIRS = \
     sdk/tools/common \
     sdk/tools/ecppc \
-    sdk/tools/ecppl \
-    sdk/tools/ecppll \
     misc
 endif
 
@@ -44,9 +42,6 @@ EXTRA_DIST = \
     demo/newsdb/newscss.css \
     demo/newsdb/newsdata.sh \
     demo/newsdb/newsdb.sql \
-    demo/newsdb/tntnet.xml \
-    doc/tntnet.pdf \
-    doc/tntnet.odt \
     doc/jquery-howto.markdown \
     doc/quick-start-guide.markdown \
     doc/static-howto.markdown \
@@ -55,8 +50,12 @@ EXTRA_DIST = \
     m4/ax_check_compile_flag.m4 \
     m4/ax_compiler_vendor.m4 \
     m4/pkg.m4 \
-    misc/logo-tntnet.cdr \
     misc/ecpp.vim \
-    misc/tntnet.svg \
-    misc/tntnet-dynamite.svg \
+    misc/tntnet-logo.svg \
     $(pkgdata_SCRIPTS)
+
+pkgconfigdir = $(libdir)/pkgconfig/
+
+pkgconfig_DATA = \
+    pkgconfig/tntnet.pc \
+    pkgconfig/tntnet_sdk.pc

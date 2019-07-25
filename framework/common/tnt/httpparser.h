@@ -39,13 +39,12 @@ namespace tnt
 {
   class RequestSizeMonitor
   {
-    private:
       size_t _requestSize;
 
     protected:
       virtual ~RequestSizeMonitor() { }
 
-      void pre(char ch) { }
+      void pre(char /* ch */) { }
       bool post(bool ret);
 
       virtual void requestSizeExceeded();
@@ -54,14 +53,14 @@ namespace tnt
       RequestSizeMonitor()
         : _requestSize(0)
         { }
+
       size_t getCurrentRequestSize() const { return _requestSize; }
-      void reset() { _requestSize = 0; }
+      void reset()                         { _requestSize = 0; }
   };
 
   class HttpRequest::Parser
     : public tnt::Parser<HttpRequest::Parser, RequestSizeMonitor>
   {
-    private:
       HttpRequest& _message;
       Messageheader::Parser _headerParser;
 

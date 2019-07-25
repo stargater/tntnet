@@ -40,10 +40,13 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <iostream>
+#include <fstream>
 #include <stdexcept>
 #include <set>
 
 #include <glob.h>
+#include <unistd.h>
+#include <sys/types.h>
 #include <sstream>
 
 #include "config.h"
@@ -69,9 +72,10 @@ namespace tnt
         glob_t _gl;
         unsigned _n;
 
-        // disable copy and assignment
-        Glob(const Glob&) { }
-        Glob& operator= (const Glob&) { return *this; }
+        // non-copyable
+        // TODO [tntnet-3.0]: use C++11 " = delete" syntax
+        Glob(const Glob&);
+        Glob& operator= (const Glob&);
 
       public:
         explicit Glob(const std::string& pattern, int flags = 0);
@@ -104,7 +108,8 @@ namespace tnt
       }
     }
 
-    Glob::~Glob() { globfree(&_gl); }
+    Glob::~Glob()
+      { globfree(&_gl); }
 
     template <typename Deserializer>
     void processConfigFile(const std::string& configFile, std::set<std::string>& filesProcessed)
@@ -132,10 +137,22 @@ namespace tnt
         }
       }
     }
-  }
+
+#ifdef CXXTOOLS_XMLDESERIALISER_ATTR
+    class XmlDeserializer : public cxxtools::xml::XmlDeserializer
+    {
+      public:
+        XmlDeserializer(std::istream& is)
+          : cxxtools::xml::XmlDeserializer(is, true)
+          { }
+    };
+#endif
+
+  } // namespace
 
   class TntnetProcess : public Process
   {
+    private:
       tnt::Tntnet _tntnet;
       bool _logall;
 
@@ -184,7 +201,11 @@ namespace tnt
     if (jsonConfig)
       processConfigFile<cxxtools::JsonDeserializer>(configFile, filesProcessed);
     else
+#ifdef CXXTOOLS_XMLDESERIALISER_ATTR
+      processConfigFile<XmlDeserializer>(configFile, filesProcessed);
+#else
       processConfigFile<cxxtools::xml::XmlDeserializer>(configFile, filesProcessed);
+#endif
 
     if (_logall)
       initializeLogging();
@@ -192,21 +213,14 @@ namespace tnt
 
   void TntnetProcess::initializeLogging()
   {
-    const cxxtools::SerializationInfo* psi = TntConfig::it().config.findMember("logging");
-    if (psi)
-      log_init(*psi);
+    log_init(TntConfig::it().logConfiguration);
   }
 
   void TntnetProcess::onInit()
     { _tntnet.init(TntConfig::it()); }
 
   void TntnetProcess::doWork()
-  {
-    if (!_logall)
-      initializeLogging();
-
-    _tntnet.run();
-  }
+    { _tntnet.run(); }
 
   void TntnetProcess::doShutdown()
     { tnt::Tntnet::shutdown(); }
@@ -218,20 +232,22 @@ int main(int argc, char* argv[])
 
   try
   {
-    cxxtools::Arg<bool> version(argc, argv, "--version");
-    if (version)
+    cxxtools::Arg<bool> version(argc, argv, 'V');
+    cxxtools::Arg<bool> versionLong(argc, argv, "--version");
+    if (version || versionLong)
     {
-      std::cout << PACKAGE_STRING "\n" << std::flush;
+      std::cout << PACKAGE_STRING << std::endl;
       return 0;
     }
 
-    cxxtools::Arg<bool> help1(argc, argv, 'h');
-    cxxtools::Arg<bool> help2(argc, argv, '?');
+    cxxtools::Arg<bool> help(argc, argv, 'h');
+    cxxtools::Arg<bool> helpLong(argc, argv, "--help");
 
-    if (help1 || help2)
+    if (help || helpLong)
     {
-      std::cout << "usage: " << argv[0] << " configurationfile (default: " TNTNET_CONF ")"
-                << std::endl;
+      // TODO: Add short explanation of available options
+      std::cout << "usage: " << argv[0] << " [options] [config-file (default: " TNTNET_CONF ")]\n"
+                   "more info with \"man 8 tntnet\"" << std::endl;
       return 0;
     }
 
@@ -272,4 +288,3 @@ int main(int argc, char* argv[])
     return -1;
   }
 }
-

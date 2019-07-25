@@ -38,7 +38,6 @@ namespace tnt
 {
   class unzipError : public std::runtime_error
   {
-    private:
       int _err;
 
       static std::string formatMsg(int e, const char* msg, const char* function);
@@ -96,7 +95,6 @@ namespace tnt
 
   class unzipFile
   {
-    private:
       struct unzFileStruct;
       unzFileStruct* _file;
 
@@ -157,7 +155,6 @@ namespace tnt
 
   class unzipFileStream : public std::istream
   {
-    private:
       unzipFileStreamBuf _streambuf;
 
     public:
@@ -168,5 +165,5 @@ namespace tnt
   };
 }
 
-#endif // UNZIPFILE_H
+#endif // TNT_UNZIPFILE_H
 

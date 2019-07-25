@@ -1,4 +1,4 @@
-AC_INIT(tntnet, 2.3, [Tommi Maekitalo <tommi@tntnet.org>])
+AC_INIT(tntnet, 3.0, [Tommi Maekitalo <tommi@tntnet.org>])
 AC_CANONICAL_TARGET
 LT_INIT([disable-static])
 
@@ -18,8 +18,12 @@ AC_SEARCH_LIBS(gethostbyname, nsl socket resolv)
 AC_SEARCH_LIBS(dlopen, dl, , AC_MSG_ERROR([dlopen not found]))
 
 AC_PROG_CXX
+AC_PROG_LIBTOOL
+AC_PROG_SED
+PKG_PROG_PKG_CONFIG
 
 AC_LANG(C++)
+AX_CXX_COMPILE_STDCXX_11(noext, optional)
 ACX_PTHREAD
 
 LIBS="$PTHREAD_LIBS $LIBS"
@@ -40,72 +44,31 @@ AC_CHECK_HEADER([cxxtools/net/tcpsocket.h], , AC_MSG_ERROR([cxxtools headers not
 AC_CHECK_FUNCS([fopen64], ,[AM_CFLAGS=-DUSE_FILE32API])
 AC_SUBST(AM_CFLAGS)
 
-AC_ARG_WITH([epoll],
-  AS_HELP_STRING([--with-epoll=yes|no|probe], [use epoll]),
-  [epoll_option=$withval],
-  [epoll_option=probe])
+AC_COMPILE_IFELSE(
+    [AC_LANG_SOURCE([
+#include <cxxtools/xml/xmldeserializer.h>
+void f()
+{
+  cxxtools::xml::XmlDeserializer d;
+  d.readAttributes(true);
+}])], AC_DEFINE(CXXTOOLS_XMLDESERIALISER_ATTR, [], [Defined if cxxtools xmldeserializer can read attributes]))
 
-AS_CASE([$epoll_option],
-  [yes],   AC_DEFINE(WITH_EPOLL, [], [Define if epoll is supported]),
-  [no],    [],
-  [probe], AC_TRY_RUN([
-            #include <sys/epoll.h>
-            int main() { return epoll_create(10) <= 0; }
-            ],
-            [AC_DEFINE(WITH_EPOLL, [], [Define if epoll is supported])]),
-  AC_MSG_ERROR([unknown epoll-value $epoll_option])
-)
+AC_COMPILE_IFELSE(
+    [AC_LANG_SOURCE([
+#include <cxxtools/net/tcpserver.h>
+int flag = cxxtools::net::TcpServer::REUSEADDR;
+])], AC_DEFINE(HAVE_CXXTOOLS_REUSEADDR, [], [Defined if cxxtools supports SO_REUSEADDR flag]))
 
-AC_ARG_WITH([sendfile],
-  AS_HELP_STRING([--with-sendfile=yes|no|probe], [use sendfile]),
-  [sendfile_option=$withval],
-  [sendfile_option=probe])
+PKG_CHECK_MODULES([MINIZIP], [minizip],
+  [HAVE_MINIZIP=true], [HAVE_MINIZIP=false])
+AC_SUBST([MINIZIP_CFLAGS])
+AC_SUBST([MINIZIP_LIBS])
+AM_CONDITIONAL([HAVE_MINIZIP], [test $HAVE_MINIZIP = true])
 
-AS_CASE([$sendfile_option],
-  [yes],    AC_DEFINE(WITH_SENDFILE, [], [Define if sendfile is supported]),
-  [no],     [],
-  [probe],  AC_CHECK_FUNCS([sendfile]),
-  AC_MSG_ERROR([unknown sendfile-value $sendfile_option])
-)
-
+AC_CHECK_FUNCS([epoll_create])
+AC_CHECK_FUNCS([epoll_create1])
+AC_CHECK_FUNCS([sendfile])
 AC_CHECK_HEADERS([sys/sendfile.h])
-
-#
-# SSL
-#
-AC_ARG_WITH([ssl],
-  AS_HELP_STRING([--with-ssl=gnutls|openssl|no], [build with SSL support (default is openssl)]),
-  [ssl_option=$withval],
-  [ssl_option=openssl])
-
-AS_CASE([$ssl_option],
-    [gnutls],
-        [PKG_CHECK_MODULES([GNUTLS], [gnutls >= 2.11], [
-            AC_MSG_RESULT([building with GnuTLS support])
-            AC_DEFINE(WITH_GNUTLS, [], [Define to build with gnutls])
-            with_gnutls=1
-          ],
-          [AC_MSG_ERROR(gnutls >= 2.11 not not found)])
-        ],
-
-    [openssl|yes],
-        [AC_CHECK_HEADER([openssl/ssl.h], [
-            AC_MSG_RESULT([building with OpenSSL support])
-            AC_DEFINE(WITH_OPENSSL, [], [Define to build with openssl])
-            with_openssl=1
-          ],
-          [AC_MSG_ERROR(openssl-headers not not found)])
-        ],
-
-    [no],
-        [AC_MSG_RESULT([building without ssl support])
-        ],
-
-    [AC_MSG_ERROR([unknown ssl-value $ssl_option])]
-)
-
-AM_CONDITIONAL(MAKE_GNUTLS, test x$with_gnutls = x1)
-AM_CONDITIONAL(MAKE_OPENSSL, test x$with_openssl = x1)
 
 #
 # optional components
@@ -137,14 +100,25 @@ AS_IF([test "$enable_demos" = "yes"],
     AS_IF([test "$enable_sdk" != "yes"],
         [AC_MSG_ERROR([demos cannot be built without building sdk])])
 
-  AC_CHECK_PROG(ZIP, zip, 1)
-  AS_IF([! test "$ZIP"],
-    AC_MSG_ERROR([zip program not found (needed for calci18n demo)]))
+    AC_CHECK_HEADER([tntdb.h], , AC_MSG_ERROR([tntdb headers not found]))
   ]
-
-  AC_CHECK_HEADER([gd.h], , AC_MSG_ERROR([gd headers not found]))
-  AC_CHECK_HEADER([tntdb.h], , AC_MSG_ERROR([tntdb headers not found]))
 )
+
+AC_ARG_WITH([md2man],
+  AS_HELP_STRING([--with-md2man], [use go-md2man tool to generate man pages from markdown])
+  [with_md2man=$withval])
+
+AS_IF(
+  [test "$with_md2man"],
+  AC_CHECK_PROG(MD2MAN, [go-md2man], [go-md2man])
+  AS_IF(
+    [test -z "$MD2MAN"],
+    AC_MSG_ERROR([go-md2man not found])
+  )
+
+)
+
+AM_CONDITIONAL(GENERATE_MAN, test ! -z "$with_md2man")
 
 #
 # others
@@ -171,40 +145,24 @@ AC_ARG_ENABLE([unittest],
 
 AM_CONDITIONAL(MAKE_UNITTEST, test "$enable_unittest" = "enable_unittest")
 
-AC_ARG_ENABLE([locale],
-  AS_HELP_STRING([--disable-locale], [disable support for locales]),
-  [enable_locale=$enableval],
-  [enable_locale=enable_locale])
-
-if test "$enable_locale" != "no"
-then
-  AC_DEFINE(ENABLE_LOCALE, [], [Defined if locale is used])
-fi
-
-AC_CONFIG_FILES([misc/tntnet-config], [chmod +x misc/tntnet-config])
+AC_CONFIG_FILES([misc/tntnet-project], [chmod +x misc/tntnet-project])
 
 AC_CONFIG_FILES([
     Makefile
     demo/Makefile
+    demo/accumulator/Makefile
     demo/calc/Makefile
     demo/calcajax/Makefile
     demo/calcapp/Makefile
-    demo/calci18n/Makefile
     demo/calcmvc/Makefile
-    demo/chat/Makefile
     demo/comp/Makefile
-    demo/config/Makefile
-    demo/controls/Makefile
     demo/cookie/Makefile
     demo/gd/Makefile
     demo/hello/Makefile
-    demo/mvc/Makefile
     demo/newsdb/Makefile
-    demo/rajax-jquery/Makefile
+    demo/rest/Makefile
     demo/savepoint/Makefile
     demo/session/Makefile
-    demo/sprintf/Makefile
-    demo/strings/Makefile
     demo/upload/Makefile
     doc/man/Makefile
     etc/Makefile
@@ -212,10 +170,10 @@ AC_CONFIG_FILES([
     framework/runtime/Makefile
     framework/defcomp/Makefile
     misc/Makefile
+    pkgconfig/tntnet.pc
+    pkgconfig/tntnet_sdk.pc
     sdk/tools/common/Makefile
     sdk/tools/ecppc/Makefile
-    sdk/tools/ecppl/Makefile
-    sdk/tools/ecppll/Makefile
     test/Makefile
     ])
 

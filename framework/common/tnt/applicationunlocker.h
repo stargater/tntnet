@@ -26,6 +26,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+
 #ifndef TNT_APPLICATIONUNLOCKER_H
 #define TNT_APPLICATIONUNLOCKER_H
 
@@ -41,14 +42,13 @@ namespace tnt
    */
   class ApplicationUnlocker
   {
-    private:
       HttpRequest& _request;
       bool _locked;
 
     public:
       explicit ApplicationUnlocker(HttpRequest& request, bool release = true)
         : _request(request),
-          locked(request.applicationScopeLocked)
+          _locked(request._applicationScopeLocked)
       {
         if (_locked && release)
           _request.releaseApplicationScopeLock();

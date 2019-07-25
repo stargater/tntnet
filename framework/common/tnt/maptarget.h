@@ -31,6 +31,7 @@
 #define TNT_MAPTARGET_H
 
 #include <tnt/compident.h>
+#include <tnt/http.h>
 #include <map>
 #include <string>
 
@@ -47,29 +48,37 @@ namespace tnt
     private:
       std::string _pathinfo;
       args_type _args;
-      bool _pathinfo_set;
+      bool _pathinfoSet;
+      unsigned _httpreturn;
 
     public:
       Maptarget()
-        : _pathinfo_set(false)
+        : _pathinfoSet(false),
+          _httpreturn(HTTP_OK)
         { }
 
       explicit Maptarget(const std::string& ident)
         : Compident(ident),
-          _pathinfo_set(false)
+          _pathinfoSet(false),
+          _httpreturn(HTTP_OK)
         { }
 
       Maptarget(const Compident& ident)
         : Compident(ident),
-          _pathinfo_set(false)
+          _pathinfoSet(false),
+          _httpreturn(HTTP_OK)
         { }
 
       bool hasPathInfo() const
-        { return _pathinfo_set; }
+        { return _pathinfoSet; }
       Maptarget& setPathInfo(const std::string& p)
-        { _pathinfo = p; _pathinfo_set = true; return *this; }
+        { _pathinfo = p; _pathinfoSet = true; return *this; }
       void setArgs(const args_type& a)
         { _args = a; }
+      void setHttpReturn(unsigned ret)
+        { _httpreturn = ret; }
+      unsigned getHttpReturn() const
+        { return _httpreturn; }
       const std::string& getPathInfo() const
         { return _pathinfo; }
       const args_type& getArgs() const
@@ -81,4 +90,3 @@ namespace tnt
 }
 
 #endif // TNT_MAPTARGET_H
-

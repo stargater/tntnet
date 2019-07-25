@@ -98,9 +98,8 @@ namespace tnt
       _handlePtr = new HandleType(handle);
   }
 
-  Component* ComponentLibrary::create(
-    const std::string& component_name, Comploader& cl,
-    const Urlmapper& rootmapper)
+  Component* ComponentLibrary::create(const std::string& component_name,
+                                      Comploader& cl, const Urlmapper& rootmapper)
   {
     log_debug("create \"" << component_name << '"');
 
@@ -120,30 +119,6 @@ namespace tnt
     return factory->create(ci, rootmapper, cl);
   }
 
-  LangLib::PtrType ComponentLibrary::getLangLib(const std::string& lang)
-  {
-    cxxtools::ReadLock rlock(mutex);
-    langlibsType::const_iterator it = _langlibs.find(lang);
-    if (it != _langlibs.end())
-      return it->second;
-
-    rlock.unlock();
-    cxxtools::WriteLock wlock(mutex);
-
-    LangLib::PtrType l;
-    try
-    {
-      std::string n = (_path.empty() ? _libname : (_path + '/' + _libname));
-      l = new LangLib(n, lang);
-    }
-    catch (const unzipError& e)
-    {
-      log_warn("unzipError: " << e.what());
-    }
-    _langlibs[lang] = l;
-    return l;
-  }
-
   ////////////////////////////////////////////////////////////////////////
   // Comploader
   //
@@ -155,8 +130,7 @@ namespace tnt
 
   ComponentLibrary::factoryMapType* Comploader::currentFactoryMap = 0;
 
-  Component& Comploader::fetchComp(const Compident& ci,
-    const Urlmapper& rootmapper)
+  Component& Comploader::fetchComp(const Compident& ci, const Urlmapper& rootmapper)
   {
     log_debug("fetchComp \"" << ci << '"');
 
@@ -183,8 +157,7 @@ namespace tnt
     return *(it->second);
   }
 
-  Component* Comploader::createComp(const Compident& ci,
-    const Urlmapper& rootmapper)
+  Component* Comploader::createComp(const Compident& ci, const Urlmapper& rootmapper)
   {
     log_debug("createComp \"" << ci << '"');
 
@@ -193,33 +166,22 @@ namespace tnt
     return comp;
   }
 
-  const char* Comploader::getLangData(const Compident& ci,
-    const std::string& lang)
-  {
-    log_debug("getLangData(" << ci << ", \"" << lang << "\")");
-    ComponentLibrary& lib = fetchLib(ci.libname);
-    LangLib::PtrType langLib = lib.getLangLib(lang);
-    if (langLib)
-      return langLib->getData(ci.compname);
-    else
-      return 0;
-  }
-
   namespace
   {
     template <typename T>
     class ValueResetter
     {
-        T& value;
-        T null;
+        T& _value;
+        T _null;
 
       public:
-        explicit ValueResetter(T& value_, T null_ = T())
-          : value(value_),
-            null(null_)
-            { }
+        explicit ValueResetter(T& value, T null = T())
+          : _value(value),
+            _null(null)
+          { }
+
         ~ValueResetter()
-        { value = null; }
+          { _value = _null; }
     };
   }
 
@@ -287,8 +249,7 @@ namespace tnt
     return it->second;
   }
 
-  void Comploader::registerFactory(const std::string& component_name,
-    ComponentFactory* factory)
+  void Comploader::registerFactory(const std::string& component_name, ComponentFactory* factory)
   {
     log_debug("Comploader::registerFactory(" << component_name << ", " << factory << ')');
 

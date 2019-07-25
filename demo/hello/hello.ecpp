@@ -11,8 +11,8 @@ name;            // define query-parameter
   <title>Hello World-application for tntnet</title>
  </head>
 
- <body bgcolor="#FFFFFF">
-  <img src="tntnet.jpg" align="right">
+ <body>
+  <img src="tntnet.png" align="right">
 
   <h1>Hello <$ name.empty() ? "World" : name $></h1>
 

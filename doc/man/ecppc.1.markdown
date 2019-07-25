@@ -13,6 +13,8 @@ SYNOPSIS
 
 `ecppc` `-bb` *filename* ...
 
+`ecppc` [`OPTION`]
+
 DESCRIPTION
 -----------
 
@@ -71,6 +73,9 @@ OPTIONS
   this component. The output can be included into a Makefile. Ecpp-dependencies
   are introduces by the <%include>-tag.
 
+`-C, --cmake`
+  Prints ecpp dependencies in a syntax, which `cmake` understands.
+
 `-n` *name*
   Set the name of the component. Normally this is derived from the
   source-file-name by removing the path and .ecpp-extension.
@@ -98,6 +103,12 @@ OPTIONS
   Compress the data in the component. Compressed data is automatically
   decopressed on first use. This reduces the code-size, but slightly slows down
   the first call of the component.
+  
+`-h, --help`
+  display this information
+  
+`-V, --version`
+  display program version
 
 AUTHOR
 ------
@@ -107,4 +118,4 @@ This manual page was written by Tommi Mäkitalo <tommi@tntnet.org>.
 SEE ALSO
 --------
 
-tntnet(8), ecpp(7), ecppl(1), ecppll(1)
+tntnet(8), ecpp(7)

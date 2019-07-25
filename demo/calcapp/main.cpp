@@ -46,13 +46,20 @@
 #include <tnt/tntnet.h>
 #include <tnt/tntconfig.h>
 #include <cxxtools/log.h>
+#include <cxxtools/arg.h>
 
 int main(int argc, char* argv[])
 {
   try
   {
-    // initialize logging - this is optional. If log_init is not called, no
-    // logging is done
+    // read listen ip from command line switch -l with default to empty, which means: all interfaces
+    cxxtools::Arg<std::string> ip(argc, argv, 'l');
+
+    // read listen port from command line switch -p with default to 8000
+    cxxtools::Arg<unsigned short> port(argc, argv, 'p', 8000);
+
+    // initialize logging - this is optional. If log_init is not called,
+    // logging is disabled
     log_init("tntnet.properties");
 
     // instantiate the tnt::Tntnet application class
@@ -76,7 +83,7 @@ int main(int argc, char* argv[])
     tnt::TntConfig::it().sessionTimeout = 600;
 
     // configure listener
-    app.listen("", 8000);  // note that a empty ip address tells tntnet to listen on all local interfaces
+    app.listen(ip, port);  // note that a empty ip address tells tntnet to listen on all local interfaces
 
     // run the application
     app.run();

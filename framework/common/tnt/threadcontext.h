@@ -26,6 +26,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+
 #ifndef TNT_THREADCONTEXT_H
 #define TNT_THREADCONTEXT_H
 
@@ -33,6 +34,7 @@ namespace tnt
 {
   class Scope;
 
+  /// @cond internal
   class ThreadContext
   {
     protected:

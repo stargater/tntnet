@@ -26,27 +26,90 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+
 #include <tnt/cmd.h>
+#include <cxxtools/sslcertificate.h>
+#include <cxxtools/log.h>
+
+log_define("tntnet.cmd")
 
 namespace tnt
 {
-  void Cmd::call(const Compident& ci, const QueryParams& queryParams)
+  namespace
   {
-    HttpRequest request(_application, &socketIf);
-    request.setQueryParams(queryParams);
+    // SocketIf methods
+    class NullSocketIf : public SocketIf
+    {
+        bool _ssl;
+
+      public:
+        explicit NullSocketIf(bool ssl)
+          : _ssl(ssl)
+          { }
+
+        std::string getPeerIp() const   { return std::string(); }
+        std::string getServerIp() const { return std::string(); }
+        bool isSsl() const              { return _ssl; }
+        cxxtools::SslCertificate getSslCertificate() const
+          { return cxxtools::SslCertificate(); }
+    };
+
+    NullSocketIf socketIf(false);
+  }
+
+  Cmd::Cmd(std::ostream& out)
+    : _request(_application, &socketIf),
+      _reply(out, false)
+  {
+    _reply.setDirectModeNoFlush();
+  }
+
+  void Cmd::call(const Compident& ci, const QueryParams& q)
+  {
+    _request.setQueryString(q.getUrl());
+    call(ci);
+  }
+
+  void Cmd::call(const Compident& ci)
+  {
+    log_debug("call " << ci);
+
+    _request.doPostParse();
 
     // set thread context for thread scope
-    request.setThreadContext(&threadContext);
+    log_debug("set thread context");
+    _request.setThreadContext(&threadContext);
+    if (!_sessionId.empty())
+    {
+      std::string cookieName;
+      if (ci.libname.empty())
+        cookieName = "tntnet";
+      else
+      {
+        cookieName = "tntnet.";
+        cookieName.append(ci.libname);
+      }
+
+      Cookies c;
+      c.setCookie(cookieName, _sessionId);
+      std::ostringstream s;
+      s << c;
+      _request.setHeader(httpheader::cookie, s.str());
+    }
 
     // sets session and application scope
-    _scopeManager.preCall(request, ci.libname);
-    _scopeManager.setSessionId(request, _sessionId);
+    log_debug("set session and application scope; session id=<" << _sessionId << '>');
+    _scopeManager.preCall(_request, ci.libname);
+    _scopeManager.setSessionId(_request, _sessionId);
 
     // fetch and call the component
-    _comploader.fetchComp(ci)(request, _reply, request.getQueryParams());
+    log_debug("do call");
+    _comploader.fetchComp(ci)(_request, _reply, _request.getQueryParams());
 
     // sets session cookie if needed
-    _sessionId = _scopeManager.postCall(request, _reply, _application.getAppName());
+    _sessionId = _scopeManager.postCall(_request, _reply, _application.getAppName());
+    log_debug("session id = " << _sessionId);
+    _request.clear();
   }
-}
 
+}

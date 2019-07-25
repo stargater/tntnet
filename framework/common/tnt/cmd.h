@@ -26,6 +26,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+
 #ifndef TNT_CMD_H
 #define TNT_CMD_H
 
@@ -37,46 +38,36 @@
 #include <tnt/scopemanager.h>
 #include <tnt/comploader.h>
 #include <tnt/compident.h>
-#include <tnt/component.h>
 
 namespace tnt
 {
   class Cmd
   {
-    private:
       Tntnet _application;
-      HttpReply _reply;
       ScopeManager _scopeManager;
+      HttpRequest _request;
+      HttpReply _reply;
       Comploader _comploader;
       std::string _sessionId;
-
-      // SocketIf methods
-      class NullSocketIf : public SocketIf
-      {
-        public:
-          std::string getPeerIp() const   { return std::string(); }
-          std::string getServerIp() const { return std::string(); }
-          bool isSsl() const              { return false; }
-      } socketIf;
 
       // thread context methods
       class MyThreadContext : public ThreadContext
       {
-        private:
           Scope _threadScope;
+
         public:
           void touch() { }
           Scope& getScope() { return _threadScope; }
       } threadContext;
 
     public:
-      explicit Cmd(std::ostream& out)
-        : _reply(out, false)
-        { _reply.setDirectModeNoFlush(); }
+      explicit Cmd(std::ostream& out);
 
       Tntnet& getApplication() { return _application; }
 
-      void call(const Compident& ci, const QueryParams& = QueryParams());
+      HttpRequest& request()  { return _request; }
+      void call(const Compident& ci, const QueryParams& q);
+      void call(const Compident& ci);
   };
 }
 

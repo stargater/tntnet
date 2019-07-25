@@ -39,24 +39,25 @@ namespace tnt
     class Subcomponent : public Component
     {
         typedef ecpp::Parser::cppargs_type cppargs_type;
-        cppargs_type cppargs;
-        const Component* outerclass;
+
+        cppargs_type _cppargs;
+        const Component* _outerclass;
 
       public:
         Subcomponent()
           : Component(std::string()),
-            outerclass(0)
+            _outerclass(0)
           { }
 
-        Subcomponent(const std::string& classname_,
-            const Component& outerclass_, const cppargs_type& cppargs_)
-          : Component(outerclass_, classname_),
-            cppargs(cppargs_),
-            outerclass(&outerclass_)
+        Subcomponent(const std::string& classname, const Component& outerclass,
+                     const cppargs_type& cppargs)
+          : Component(outerclass, classname),
+            _cppargs(cppargs),
+            _outerclass(&outerclass)
           { }
 
         void getHeader(std::ostream& o) const;
-        void getDefinition(std::ostream& o, bool externData, bool linenumbersEnabled) const;
+        void getDefinition(std::ostream& o, bool linenumbersEnabled) const;
         virtual void getScopevars(std::ostream& o, bool linenumbersEnabled) const;
     };
   }

@@ -4,10 +4,13 @@ nobase_dist_noinst_DATA = \
 nobase_sysconf_DATA = \
     tntnet/tntnet.xml
 
+CLEANFILES = tntnet.xml
+
 tntnet/tntnet.xml: tntnet/tntnet.xml.in
-	mkdir -p tntnet && \
-	sed -e 's,@libdir\@,@libdir@,g;' \
+	$(AM_V_GEN) \
+	$(MKDIR_P) tntnet && \
+	$(SED) -e 's,@libdir\@,@libdir@,g;' \
 	    -e 's,@pkglibdir\@,@pkglibdir@,g;' \
 	    -e 's,@sysconfdir\@,@sysconfdir@,g;' \
 	    -e 's,@localstatedir\@,@localstatedir@,g;' \
-		-e 's,@datadir\@,@datadir@,g;' < $(srcdir)/tntnet/tntnet.xml.in > tntnet/tntnet.xml
+	    -e 's,@datadir\@,@datadir@,g;' < $(srcdir)/tntnet/tntnet.xml.in > tntnet/tntnet.xml

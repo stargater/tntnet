@@ -32,22 +32,21 @@
 
 #include <cxxtools/smartptr.h>
 #include <tnt/urlmapper.h>
-#include <tnt/langlib.h>
 #include <map>
 #include <list>
 #include <string>
 #include <utility>
 #include <dlfcn.h>
 
+/// @cond internal
+
 namespace tnt
 {
   class Comploader;
   class ComponentFactory;
 
-  /// @cond internal
   class LibraryNotFound : public std::exception
   {
-    private:
       std::string _libname;
       std::string _msg;
 
@@ -75,25 +74,20 @@ namespace tnt
         delete ptr;
       }
   };
-  /// @endcond internal
 
   class ComponentLibrary
   {
-    friend class Comploader;
+      friend class Comploader;
 
-    private:
       typedef void* HandleType;
       typedef cxxtools::SmartPtr<HandleType, cxxtools::ExternalRefCounted, Dlcloser> HandlePointer;
 
       typedef std::map<std::string, ComponentFactory*> factoryMapType;
 
-      typedef std::map<std::string, LangLib::PtrType> langlibsType;
-
       HandlePointer _handlePtr;
       factoryMapType _factoryMap;
       std::string _libname;
       std::string _path;
-      langlibsType _langlibs;
 
       void* dlopen(const std::string& name, bool local);
       void init(const std::string& name, bool local);
@@ -114,7 +108,6 @@ namespace tnt
       operator const void* () const { return _handlePtr.getPointer(); }
 
       Component* create(const std::string& compname, Comploader& cl, const Urlmapper& rootmapper);
-      LangLib::PtrType getLangLib(const std::string& lang);
 
       const std::string& getName() const { return _libname; }
 
@@ -124,7 +117,6 @@ namespace tnt
 
   class Comploader
   {
-    private:
       typedef std::map<std::string, ComponentLibrary> librarymap_type;
       typedef std::map<Compident, Component*> componentmap_type;
 

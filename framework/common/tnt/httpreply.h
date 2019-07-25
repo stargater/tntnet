@@ -45,10 +45,12 @@ namespace tnt
     private:
       struct Impl;
       Impl* _impl;
-      std::ostream* _current_outstream;
-      std::ostream* _safe_outstream;
-      std::ostream* _url_outstream;
+      std::ostream* _currentOutstream;
+      std::ostream* _safeOutstream;
+      std::ostream* _urlOutstream;
 
+      void sendHttpStatus(std::ostream& hsocket, unsigned ret, const char* msg) const;
+      void sendHttpHeaders(std::ostream& hsocket) const;
       void send(unsigned ret, const char* msg, bool ready) const;
 
     public:
@@ -70,7 +72,7 @@ namespace tnt
       /// Check if the session is configured to be cleared after the current request
       bool isClearSession() const;
 
-      enum Redirect { permanently = HTTP_MOVED_PERMANENTLY, temporarily = HTTP_MOVED_TEMPORARILY };
+      enum Redirect { permanently = HTTP_MOVED_PERMANENTLY, temporarily = HTTP_TEMPORARY_REDIRECT };
       /// @{
       /** Redirect the user to another URL
 
@@ -89,22 +91,18 @@ namespace tnt
        */
       unsigned notAuthorized(const std::string& realm);
 
-      // TODO: Why does this exist?
-      /// alias for notAuthorized
-      unsigned notAuthorised(const std::string& realm) { return notAuthorized(realm); }
-
-      void sendReply(unsigned ret, const char* msg = "OK");
-      void sendReply(unsigned ret, const std::string& msg)
-        { sendReply(ret, msg.c_str()); }
+      bool sendReply(unsigned ret, const char* msg = "OK");
+      bool sendReply(unsigned ret, const std::string& msg)
+        { return sendReply(ret, msg.c_str()); }
 
       /// Get output stream
-      std::ostream& out()    { return *_current_outstream; }
+      std::ostream& out()    { return *_currentOutstream; }
 
       /// Get safe output stream (unsafe html characters written into this stream are escaped)
-      std::ostream& sout()   { return *_safe_outstream; }
+      std::ostream& sout()   { return *_safeOutstream; }
 
       /// Get url output stream (everything written into this stream is url-encoded)
-      std::ostream& uout()   { return *_url_outstream; }
+      std::ostream& uout()   { return *_urlOutstream; }
 
       void resetContent();
       void rollbackContent(unsigned size);
@@ -117,6 +115,7 @@ namespace tnt
       virtual void setDirectModeNoFlush();
       virtual bool isDirectMode() const;
       std::string::size_type getContentSize() const;
+      unsigned chunkedBytesWritten() const;
       std::ostream& getDirectStream();
 
       /** Enable chunked encoding for the current request
@@ -132,7 +131,7 @@ namespace tnt
           Sessions are created automatically when a session variable is used and
           no session cookie was received.
       */
-      void setChunkedEncoding(unsigned ret = HTTP_OK, const char* msg = "OK");
+      void setChunkedEncoding(unsigned ret = HTTP_OK, const char* msg = 0);
 
       /// Check whether chunked encoding is enabled
       bool isChunkedEncoding() const;
@@ -165,11 +164,7 @@ namespace tnt
       void setAcceptEncoding(const Encoding& enc);
 
       bool keepAlive() const;
-
-      void setLocale(const std::locale& loc)
-        { out().imbue(loc); sout().imbue(loc); }
   };
 }
 
 #endif // TNT_HTTPREPLY_H
-

@@ -32,13 +32,15 @@
 
 #include <iostream>
 
+/// @cond internal
+
 namespace tnt
 {
   class PrePostNop
   {
     protected:
-      void pre(char ch)   { }
-      bool post(bool ret) { return ret; }
+      void pre(char /* ch */) { }
+      bool post(bool ret)     { return ret; }
   };
 
   template <typename this_type, class PrePostProcessor = PrePostNop>

@@ -9,10 +9,17 @@
 /configure
 /depcomp
 /install-sh
-/libtool
 /ltmain.sh
-/m4
 /missing
+
+/m4/*.m4
+!/m4/acx_pthread.m4
+!/m4/ax_check_compile_flag.m4
+!/m4/ax_compiler_vendor.m4
+!/m4/pkg.m4
+!/m4/ax_cxx_compile_stdcxx_11.m4
+
+/framework/common/config.h.in
 
 .deps
 .libs
@@ -26,20 +33,19 @@ stamp-h1
 
 # Files generated or compiled in the build process
 
-tntnet-config
-
 **/framework/common/config.h
-**/framework/common/config.h.in
 **/framework/runtime/tntnet
+**/misc/tntnet-config
+**/misc/tntnet-project
 **/sdk/tools/ecppc/ecppc
 **/sdk/tools/ecppl/ecppl
 **/sdk/tools/ecppll/ecppll
-**/etc/init.d/tntnet
 **/etc/tntnet/tntnet.xml
-**/utest/utest
+**/test/tntnet-test
 
 *.l[ao]
 *.o
+*.pc
 *.swp
 
 # Other

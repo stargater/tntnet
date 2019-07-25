@@ -34,6 +34,7 @@
 #include <functional>
 #include <iterator>
 #include <algorithm>
+#include <sstream>
 #include <cxxtools/log.h>
 
 log_define("tntnet.dispatcher")
@@ -65,17 +66,24 @@ namespace tnt
       _url(url),
       _method(method),
       _ssl(ssl),
-      _r_vhost(vhost),
-      _r_url(url),
-      _r_method(method),
+      _regexVhost(vhost),
+      _regexUrl(url),
+      _regexMethod(method),
       _target(target)
   { }
 
+  Mapping& Mapping::pushArg(const std::string& value)
+  {
+    std::ostringstream k;
+    k << "arg" << _target.getArgs().size();
+    return setArg(k.str(), value);
+  }
+
   bool Mapping::match(const HttpRequest& request, cxxtools::RegexSMatch& smatch) const
   {
-    return (_vhost.empty()  || _r_vhost.match(request.getHost()))
-        && (_url.empty()    || _r_url.match(request.getUrl(), smatch))
-        && (_method.empty() || _r_method.match(request.getMethod()))
+    return (_vhost.empty()  || _regexVhost.match(request.getHost()))
+        && (_url.empty()    || _regexUrl.match(request.getUrl(), smatch))
+        && (_method.empty() || _regexMethod.match(request.getMethod()))
         && (_ssl == SSL_ALL
             || (_ssl == SSL_YES && request.isSsl())
             || (_ssl == SSL_NO && !request.isSsl()));
@@ -174,6 +182,7 @@ namespace tnt
           Maptarget ci;
           ci.libname = formatter(src.libname);
           ci.compname = formatter(src.compname);
+          ci.setHttpReturn(src.getHttpReturn());
 
           if (src.hasPathInfo())
             ci.setPathInfo(formatter(src.getPathInfo()));
@@ -219,4 +228,3 @@ namespace tnt
     return _dis.mapCompNext(_request, _pos);
   }
 }
-

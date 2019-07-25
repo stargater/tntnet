@@ -31,6 +31,7 @@
 #define TNT_HTTP_H
 
 static const unsigned DECLINED = 0;
+static const unsigned DEFAULT = 1;
 static const unsigned HTTP_CONTINUE = 100;
 static const unsigned HTTP_SWITCHING_PROTOCOLS = 101;
 static const unsigned HTTP_PROCESSING = 102;
@@ -44,7 +45,8 @@ static const unsigned HTTP_PARTIAL_CONTENT = 206;
 static const unsigned HTTP_MULTI_STATUS = 207;
 static const unsigned HTTP_MULTIPLE_CHOICES = 300;
 static const unsigned HTTP_MOVED_PERMANENTLY = 301;
-static const unsigned HTTP_MOVED_TEMPORARILY = 302;
+static const unsigned HTTP_MOVED_TEMPORARILY = 302; // obsolete
+static const unsigned HTTP_FOUND = 302;
 static const unsigned HTTP_SEE_OTHER = 303;
 static const unsigned HTTP_NOT_MODIFIED = 304;
 static const unsigned HTTP_USE_PROXY = 305;

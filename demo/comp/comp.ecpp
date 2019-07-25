@@ -126,11 +126,11 @@ normal parameterlist just like in c++-functions after the defition
 
 <h2> pass multiple values with the same name as parameter </h2>
 <p class="example">
- &lt;&amp; localcomp param3="value1" param3="value2"
-              param4="17" param4=(28) &amp;&gt;
+ &lt;&amp; localcomp param3[]="value1" param3[]="value2"
+              param4[]="17" param4[]=(28) &amp;&gt;
 </p>
- <& localcomp param3="value1" param3="value2"
-              param4="17" param4=(28) &>
+ <& localcomp param3[]="value1" param3[]="value2"
+              param4[]="17" param4[]=(28) &>
 
 <h2> call subcomponents in c++-blocks </h2>
 <p class="example">
@@ -161,10 +161,10 @@ int param4[];
   "param4".
   The values of param3 are:
   <{ std::copy(param3.begin(), param3.end(),
-       std::ostream_iterator<param3_type::value_type>(reply.out(), ", ")); }>.
+       std::ostream_iterator<std::string>(reply.out(), ", ")); }>.
   The values of param4 are:
   <{ std::copy(param4.begin(), param4.end(),
-       std::ostream_iterator<param4_type::value_type>(reply.out(), ", ")); }>.
+       std::ostream_iterator<int>(reply.out(), ", ")); }>.
 </%def>
 
 <%def localcomp_p(int i)>

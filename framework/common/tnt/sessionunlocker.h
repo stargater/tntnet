@@ -26,6 +26,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+
 #ifndef TNT_SESSIONUNLOCKER_H
 #define TNT_SESSIONUNLOCKER_H
 
@@ -49,16 +50,16 @@ namespace tnt
 
     public:
       explicit SessionUnlocker(HttpRequest& request, bool release = true)
-        : _request(request)
-          _locked(request.sessionScopeLocked)
+        : _request(request),
+          _locked(request._sessionScopeLocked)
       {
-        if (locked && release)
+        if (_locked && release)
           _request.releaseSessionScopeLock();
       }
 
       ~SessionUnlocker()
       {
-        if (locked)
+        if (_locked)
           _request.ensureSessionScopeLock();
       }
 

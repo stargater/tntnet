@@ -32,104 +32,20 @@
 
 #include <cxxtools/mutex.h>
 #include <tnt/urlmapper.h>
+#include <tnt/mapping.h>
 #include <tnt/maptarget.h>
-#include <tnt/tntconfig.h>
 #include <vector>
 #include <map>
-#include <cxxtools/regex.h>
 
 namespace tnt
 {
   class HttpRequest;
 
-  class Mapping
-  {
-    private:
-      std::string _vhost;
-      std::string _url;
-      std::string _method;
-      int _ssl;
-
-      cxxtools::Regex _r_vhost;
-      cxxtools::Regex _r_url;
-      cxxtools::Regex _r_method;
-
-      Maptarget _target;
-
-    public:
-      typedef Maptarget::args_type args_type;
-
-      Mapping() { }
-
-      Mapping(const std::string& vhost, const std::string& url, const std::string& method, int ssl, const Maptarget& target);
-
-      const std::string& getVHost() const  { return _vhost; }
-      const std::string& getUrl() const    { return _url; }
-      const std::string& getMethod() const { return _method; }
-      int getSsl() const                   { return _ssl; }
-
-      const Maptarget& getTarget() const   { return _target; }
-
-      Mapping& setPathInfo(const std::string& p)
-      {
-        _target.setPathInfo(p);
-        return *this;
-      }
-
-      Mapping& setArgs(const args_type& a)
-      {
-        _target.setArgs(a);
-        return *this;
-      }
-
-      Mapping& setArg(const std::string& name, const std::string& value)
-      {
-        _target.setArg(name, value);
-        return *this;
-      }
-
-      Mapping& setVHost(const std::string& vhost)
-      {
-        _vhost = vhost;
-        _r_vhost = cxxtools::Regex(vhost);
-        return *this;
-      }
-
-      Mapping& setUrl(const std::string& url)
-      {
-        _url = url;
-        _r_url = cxxtools::Regex(url);
-        return *this;
-      }
-
-      Mapping& setMethod(const std::string& method)
-      {
-        _method = method;
-        _r_method = cxxtools::Regex(method);
-        return *this;
-      }
-
-      Mapping& setSsl(bool sw)
-      {
-        _ssl = (sw ? SSL_YES : SSL_NO);
-        return *this;
-      }
-
-      Mapping& unsetSsl()
-      {
-        _ssl = SSL_ALL;
-        return *this;
-      }
-
-      bool match(const HttpRequest& request, cxxtools::RegexSMatch& smatch) const;
-  };
-
   /// @cond internal
   class Dispatcher : public Urlmapper // one per host
   {
-    friend class PosType;
+      friend class PosType;
 
-    private:
       typedef std::vector<Mapping> urlmap_type;
 
       urlmap_type _urlmap; // map url to soname/compname
@@ -137,7 +53,6 @@ namespace tnt
 
       class UrlMapCacheKey
       {
-        private:
           std::string _vhost;
           std::string _url;
           std::string _method;
@@ -182,11 +97,10 @@ namespace tnt
       Mapping& addUrlMapEntry(const std::string& vhost, const std::string& url, const std::string& method, int ssl, const Maptarget& ci);
 
       Mapping& addUrlMapEntry(const std::string& vhost, const std::string& url, const Maptarget& ci)
-      { return addUrlMapEntry(vhost, url, std::string(), SSL_ALL, ci); }
+        { return addUrlMapEntry(vhost, url, std::string(), SSL_ALL, ci); }
 
       class PosType
       {
-        private:
           const Dispatcher& _dis;
           cxxtools::ReadLock _lock;
           urlmap_type::size_type _pos;
@@ -205,7 +119,7 @@ namespace tnt
           Maptarget getNext();
       };
   };
+  /// @endcond internal
 }
 
 #endif // TNT_DISPATCHER_H
-

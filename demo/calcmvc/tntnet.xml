@@ -1,27 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <tntnet>
-  <mappings>
-    <mapping>
-      <target>redirect@tntnet</target>
-      <url>^/$</url>
-      <pathinfo>/calc</pathinfo>
-      <args>
-        <type>permanently</type>
-      </args>
-    </mapping>
-
-    <mapping>
-      <target>controller/$1@calcmvc</target>
-      <url>^/(.+)$</url>
-      <method>^POST$</method>
-    </mapping>
-    <mapping>
-      <target>calcmvc@calcmvc</target>
-      <url>^/(.+)$</url>
-      <pathinfo>view/$1</pathinfo>
-    </mapping>
-
-  </mappings>
 
   <listeners>
     <listener>
@@ -50,8 +28,4 @@
     -->
 
   </logging>
-
-  <compPath>
-    <entry>.libs</entry>
-  </compPath>
 </tntnet>

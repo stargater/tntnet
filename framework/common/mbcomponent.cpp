@@ -26,6 +26,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+
 #include <tnt/mbcomponent.h>
 #include <tnt/data.h>
 #include <tnt/http.h>
@@ -62,7 +63,7 @@ namespace tnt
   unsigned MbComponent::topCall(tnt::HttpRequest& request, tnt::HttpReply& reply, tnt::QueryParams& qparam)
     { return doCall(request, reply, qparam, true); }
 
-  unsigned MbComponent::doCall(tnt::HttpRequest& request, tnt::HttpReply& reply, tnt::QueryParams& qparam, bool top)
+  unsigned MbComponent::doCall(tnt::HttpRequest& request, tnt::HttpReply& reply, tnt::QueryParams&, bool top)
   {
     log_trace("MbComponent " << getCompident());
 
@@ -118,10 +119,10 @@ namespace tnt
           {
             // check for compression
             std::string body(data[url_idx].getData(), data[url_idx].getLength());
-            log_info("try compress");
+            log_debug("compress");
             if (reply.tryCompress(body))
             {
-              log_info("compressed successfully from " << data[url_idx].getLength() << " to " << body.size());
+              log_info("compressed from " << data[url_idx].getLength() << " to " << body.size());
               _compressedData[url_idx] = body;
             }
             else

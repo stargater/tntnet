@@ -47,9 +47,16 @@ namespace tnt
   ScopeManager::~ScopeManager()
   {
     for (sessionscopes_type::iterator it = _sessionScopes.begin(); it != _sessionScopes.end(); ++it)
-      delete it->second;
+    {
+      if (it->second->release() == 0)
+        delete it->second;
+    }
+
     for (scopes_type::iterator it = _applicationScopes.begin(); it != _applicationScopes.end(); ++it)
-      delete it->second;
+    {
+      if (it->second->release() == 0)
+        delete it->second;
+    }
   }
 
   Scope* ScopeManager::getApplicationScope(const std::string& appname)
@@ -59,13 +66,13 @@ namespace tnt
     scopes_type::iterator it = _applicationScopes.find(appname);
     if (it == _applicationScopes.end())
     {
-      log_debug("applicationscope not found - create new");
+      log_debug("applicationscope <" + appname + "> not found - create new");
       Scope* s = new Scope();
       it = _applicationScopes.insert(scopes_type::value_type(appname, s)).first;
       return s;
     }
     else
-      log_debug("applicationscope found");
+      log_debug("applicationscope <" + appname + "> found");
 
     return it->second;
   }
@@ -115,6 +122,8 @@ namespace tnt
 
   void ScopeManager::removeApplicationScope(const std::string& appname)
   {
+    log_debug("remove application scope <" << appname << '>');
+
     cxxtools::MutexLock lock(_applicationScopesMutex);
     scopes_type::iterator it = _applicationScopes.find(appname);
     if (it != _applicationScopes.end())
@@ -186,12 +195,12 @@ namespace tnt
       c = request.getCookie(currentSecureSessionCookieName);
       if (c.getValue().empty())
       {
-        log_debug("secure session cookie " << currentSessionCookieName
+        log_debug("secure session cookie " << currentSecureSessionCookieName
             << " not found - keep session");
       }
       else if (request.isSsl())
       {
-        log_debug("secure session cookie " << currentSessionCookieName
+        log_debug("secure session cookie " << currentSecureSessionCookieName
             << " found: " << c.getValue());
 
         cxxtools::MutexLock lock(_sessionScopesMutex);
@@ -326,7 +335,7 @@ namespace tnt
     while (it != _sessionScopes.end())
     {
       Sessionscope* s = it->second;
-      if (static_cast <unsigned> (currentTime - s->getAtime()) > s->getTimeout())
+      if (cxxtools::Seconds(currentTime - s->getAtime()) > s->getTimeout())
       {
         log_info("sessiontimeout for session " << it->first << " reached");
         sessionscopes_type::iterator it2 = it;

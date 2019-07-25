@@ -26,6 +26,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+
 #ifndef TNT_MIMEHANDLER_H
 #define TNT_MIMEHANDLER_H
 
@@ -34,12 +35,8 @@
 
 namespace tnt
 {
-  ////////////////////////////////////////////////////////////////////////
-  // MimeHandler
-  //
   class MimeHandler
   {
-    private:
       tnt::MimeDb _mimeDb;
 
     public:

@@ -39,7 +39,6 @@ namespace tnt
 {
   class DeflateError : public std::runtime_error
   {
-    private:
       int _zRet;
 
     public:
@@ -53,13 +52,12 @@ namespace tnt
 
   class DeflateStreamBuf : public std::streambuf
   {
-    private:
       z_stream _stream;
       std::vector<char_type> _obuffer;
       std::streambuf* _sink;
 
     public:
-      explicit DeflateStreamBuf(std::streambuf* sink_, int level = Z_DEFAULT_COMPRESSION, unsigned bufsize = 8192);
+      explicit DeflateStreamBuf(std::streambuf* sink_, int level, int windowBits, unsigned bufsize);
       ~DeflateStreamBuf();
 
       /// see std::streambuf
@@ -71,26 +69,28 @@ namespace tnt
 
       /// end deflate-stream
       int end();
+      void reinitialize();
       void setSink(std::streambuf* sink) { _sink = sink; }
       uLong getAdler() const             { return _stream.adler; }
   };
 
   class DeflateStream : public std::ostream
   {
-    private:
       DeflateStreamBuf _streambuf;
 
     public:
-      explicit DeflateStream(std::streambuf* sink, int level = Z_DEFAULT_COMPRESSION)
+      explicit DeflateStream(std::streambuf* sink, int level = Z_DEFAULT_COMPRESSION, int windowBits = 16 + MAX_WBITS)
         : std::ostream(0),
-          _streambuf(sink, level)
+          _streambuf(sink, level, windowBits, 8192)
           { init(&_streambuf); }
-      explicit DeflateStream(std::ostream& sink, int level = Z_DEFAULT_COMPRESSION)
+      explicit DeflateStream(std::ostream& sink, int level = Z_DEFAULT_COMPRESSION, int windowBits = 16 + MAX_WBITS)
         : std::ostream(0),
-          _streambuf(sink.rdbuf(), level)
+          _streambuf(sink.rdbuf(), level, windowBits, 8192)
           { init(&_streambuf); }
 
       void end();
+      void reinitialize()
+      { _streambuf.reinitialize(); }
       void setSink(std::streambuf* sink) { _streambuf.setSink(sink); }
       void setSink(std::ostream& sink)   { _streambuf.setSink(sink.rdbuf()); }
       uLong getAdler() const             { return _streambuf.getAdler(); }

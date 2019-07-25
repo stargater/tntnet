@@ -10,6 +10,7 @@ libtntnet_la_SOURCES = \
 	contentdisposition.cpp \
 	contenttype.cpp \
 	cookie.cpp \
+	cstream.cpp \
 	deflatestream.cpp \
 	dispatcher.cpp \
 	ecpp.cpp \
@@ -21,9 +22,7 @@ libtntnet_la_SOURCES = \
 	httpparser.cpp \
 	httprequest.cpp \
 	httpreply.cpp \
-	ioapi.c \
 	job.cpp \
-	langlib.cpp \
 	listener.cpp \
 	mbcomponent.cpp \
 	messageattribute.cpp \
@@ -32,23 +31,22 @@ libtntnet_la_SOURCES = \
 	mimedb.cpp \
 	multipart.cpp \
 	poller.cpp \
-	query_params.cpp \
+	pollerimpl.cpp \
 	savepoint.cpp \
 	scope.cpp \
 	scopemanager.cpp \
 	stringlessignorecase.cpp \
+	tcpjob.cpp \
 	tntconfig.cpp \
 	tntnet.cpp \
-	unzip.c \
+	tntnetimpl.cpp \
 	unzipfile.cpp \
 	urlescostream.cpp \
 	urlmapper.cpp \
 	util.cpp \
 	worker.cpp \
 	zdata.cpp \
-	crypt.h \
-	ioapi.h \
-	unzip.h
+	crypt.h
 
 nobase_include_HEADERS = \
 	tnt/applicationunlocker.h \
@@ -64,7 +62,6 @@ nobase_include_HEADERS = \
 	tnt/cookie.h \
 	tnt/data.h \
 	tnt/deflatestream.h \
-	tnt/dispatcher.h \
 	tnt/ecpp.h \
 	tnt/encoding.h \
 	tnt/htmlescostream.h \
@@ -75,8 +72,7 @@ nobase_include_HEADERS = \
 	tnt/httpparser.h \
 	tnt/httprequest.h \
 	tnt/httpreply.h \
-	tnt/job.h \
-	tnt/langlib.h \
+	tnt/mapping.h \
 	tnt/maptarget.h \
 	tnt/mbcomponent.h \
 	tnt/messageattribute.h \
@@ -86,7 +82,6 @@ nobase_include_HEADERS = \
 	tnt/multipart.h \
 	tnt/object.h \
 	tnt/parser.h \
-	tnt/poller.h \
 	tnt/query_params.h \
 	tnt/savepoint.h \
 	tnt/scope.h \
@@ -101,36 +96,31 @@ nobase_include_HEADERS = \
 	tnt/unzipfile.h \
 	tnt/urlescostream.h \
 	tnt/urlmapper.h \
-	tnt/worker.h \
 	tnt/zdata.h
 
 noinst_HEADERS = \
+	tnt/cstream.h \
+	tnt/dispatcher.h \
+	tnt/job.h \
 	tnt/listener.h \
+	tnt/poller.h \
 	tnt/pollerimpl.h \
-	tnt/ssl.h \
 	tnt/tcpjob.h \
-	tnt/util.h
+	tnt/util.h \
+	tnt/worker.h \
+	tntnetimpl.h \
+	ioapi.h \
+	unzip.h
 
 libtntnet_la_CXXFLAGS = -DPKGLIBDIR=\"@libdir@/@PACKAGE@\"
 libtntnet_la_LDFLAGS = -version-info @sonumber@ @SHARED_LIB_FLAG@
 libtntnet_la_LIBADD = -lz -lcxxtools
 
-if MAKE_GNUTLS
+if HAVE_MINIZIP
+libtntnet_la_CXXFLAGS += $(MINIZIP_CFLAGS)
+libtntnet_la_LDFLAGS += $(MINIZIP_LIBS)
+else
 libtntnet_la_SOURCES += \
-	gnutls.cpp
-
-noinst_HEADERS += \
-	tnt/gnutls.h
-
-libtntnet_la_LIBADD += $(GNUTLS_LIBS)
-endif
-
-if MAKE_OPENSSL
-libtntnet_la_SOURCES += \
-	openssl.cpp
-
-noinst_HEADERS += \
-	tnt/openssl.h
-
-libtntnet_la_LIBADD += -lssl -lcrypto
+	ioapi.c \
+	unzip.c
 endif

@@ -26,6 +26,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+
 #include <tnt/component.h>
 #include <tnt/componentfactory.h>
 #include <tnt/ecpp.h>
@@ -37,7 +38,10 @@
 #include <cxxtools/http/reply.h>
 #include <cxxtools/net/uri.h>
 #include <cxxtools/log.h>
-#include <string.h>
+#include <cxxtools/split.h>
+#include <strings.h>
+#include <vector>
+#include <iterator>
 
 log_define("tntnet.proxy")
 
@@ -47,7 +51,7 @@ namespace tnt
   class Comploader;
 
   ////////////////////////////////////////////////////////////////////////
-  // componentdeclaration
+  // component declaration
   //
   class Proxy : public tnt::EcppComponent
   {
@@ -80,11 +84,15 @@ namespace tnt
   static ProxyFactory proxyFactory("proxy");
 
   ////////////////////////////////////////////////////////////////////////
-  // componentdefinition
+  // component definition
   //
   unsigned Proxy::operator() (tnt::HttpRequest& request, tnt::HttpReply& reply, tnt::QueryParams& qparam)
   {
-    if (request.getArgs().size() < 1)
+    std::string uriStr = request.getArg("uri");
+    if (uriStr.empty())
+        uriStr = request.getArg(0);  // for compatibility
+
+    if (uriStr.empty())
     {
       log_error("proxy uri missing in configuration");
       throw std::runtime_error("proxy uri missing in configuration");
@@ -94,7 +102,7 @@ namespace tnt
     TNT_THREAD_COMPONENT_VAR(unsigned short, currentProxyPort, ());
     TNT_THREAD_COMPONENT_VAR(cxxtools::http::Client, client, ());
 
-    cxxtools::net::Uri uri(request.getArg(0));
+    cxxtools::net::Uri uri(uriStr);
 
     std::string url = uri.path();
     bool urlEndsWithSlash = !url.empty() && url[url.size()-1] == '/';
@@ -161,6 +169,20 @@ namespace tnt
     value = request.getHeader(tnt::httpheader::ifModifiedSince, 0);
     if (value)
       clientRequest.header().setHeader("If-Modified-Since", value);
+
+    std::vector<std::string> forwardHeaders;
+    log_debug("forwardHeaders: \"" << request.getArg("forwardHeaders") << '"');
+    cxxtools::split(',', request.getArg("forwardHeaders"), std::back_inserter(forwardHeaders));
+    for (unsigned n = 0; n < forwardHeaders.size(); ++n)
+    {
+      log_debug("forward header \"" << forwardHeaders[n] << '"');
+      value = request.getHeader((forwardHeaders[n] + ':').c_str(), 0);
+      if (value)
+      {
+        log_debug("value \"" << value << '"');
+        clientRequest.header().setHeader(forwardHeaders[n].c_str(), value);
+      }
+    }
 
     // execute client request
     client.execute(clientRequest);

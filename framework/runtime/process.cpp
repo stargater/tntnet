@@ -38,6 +38,8 @@
 #include <fstream>
 #include <errno.h>
 #include <signal.h>
+#include <unistd.h>
+#include <sys/types.h>
 
 log_define("tntnet.process")
 
@@ -80,7 +82,11 @@ namespace
 
     log_debug("change user to " << user << '(' << pw->pw_uid << ')');
 
-    int ret = ::setuid(pw->pw_uid);
+    int ret = ::setgroups(0, NULL);
+    if (ret != 0)
+      throw cxxtools::SystemError("setgroups");
+
+    ret = ::setuid(pw->pw_uid);
     if (ret != 0)
       throw cxxtools::SystemError("getuid");
   }
@@ -195,7 +201,7 @@ namespace tnt
 
       if (fork.child())
       {
-        // worker-process
+        // worker process
 
         log_debug("close read-fd of monitor-pipe");
         monitorPipe.closeReadFd();
@@ -234,7 +240,7 @@ namespace tnt
         return;
       }
 
-      // monitor-process
+      // monitor process
 
       log_debug("write pid " << fork.getPid() << " to \"" << tnt::TntConfig::it().pidfile << '"');
       PidFile p(tnt::TntConfig::it().pidfile, fork.getPid());
